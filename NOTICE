@@ -1,0 +1,32 @@
+# NOTICE
+
+## Origin
+
+This repository is a port of **SocialENS** (https://github.com/NikhilRaikwar/SocialENS),
+released under the MIT License. The original copyright notice is preserved verbatim in
+[`LICENSE`](./LICENSE).
+
+The port keeps the project's MIT licensing intact and records exactly which parts were
+reused and which parts were rewritten in [`ATTRIBUTION.md`](./ATTRIBUTION.md).
+
+## Baseline disclosure
+
+The origin repository was generated from **Scaffold-ETH 2** and inherited its Next.js +
+Tailwind CSS + daisyUI application shell. The shell (layout, header/footer, theme handling,
+notification surface, global styles) was carried over and adapted; the chain integration,
+data layer, wallet plumbing, contracts, and tests in this repository were rewritten for NEAR.
+
+No Scaffold-ETH 2 code outside that generic application shell is part of this repository:
+the EVM hooks, contract ABIs, wallet connectors, and the example contract workspace were
+removed, not vendored.
+
+## Third-party software
+
+See each workspace manifest for the exact dependency set:
+
+- `web/package.json` — Next.js, React, NEAR Connect, `near-api-js`, `near-social-js`,
+  the function-call access key plugin, Tailwind CSS, daisyUI, and UI utilities.
+- `demo/package.json` — `near-api-js` for the zero-funds testnet loop and the measurement script.
+- `contract/Cargo.toml` — `near-sdk` plus sandbox test dependencies.
+
+All third-party software remains under its own license.

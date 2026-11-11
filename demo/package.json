@@ -1,0 +1,14 @@
+{
+  "name": "philia-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-funds testnet social loop and gas/latency measurement for philia.",
+  "scripts": {
+    "social-loop": "node social-loop.mjs",
+    "measure": "node measure.mjs"
+  },
+  "dependencies": {
+    "near-api-js": "7.5.3"
+  }
+}

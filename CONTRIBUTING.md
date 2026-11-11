@@ -1,60 +1,69 @@
-# Contributing to SocialENS
+# Contributing to philia
 
-First off, thanks for taking the time to contribute! 🎉
+Thanks for helping. This repository holds three workspaces:
 
-SocialENS is a decentralized social network built for **ETH HACK MONEY 2026**. We welcome contributions from the community to help make decentralized social media a reality.
+- `contract/` — the `philia-tips` Rust contract (near-sdk 5.30.1).
+- `web/` — the Next.js application (`philia-web`).
+- `demo/` — Node scripts for the zero-funds testnet loop and the measurement run.
 
-## 🛠️ Tech Stack
+## Toolchain
 
-- **Framework**: Next.js 14, Scaffold-ETH 2
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS, DaisyUI
-- **Blockchain**: Ethereum Sepolia, ENS (Ethereum Name Service)
-- **State Management**: Wagmi v2, Viem
+- Node.js >= 22.22.2 and pnpm >= 10.4.1.
+- Rust 1.95.0 with the `wasm32-unknown-unknown` target (the contract pins it in
+  `contract/rust-toolchain.toml`).
+- `cargo-near` 0.23.0 and `near-cli-rs` 0.31.1 for builds and testnet deployment.
 
-## 🚀 Getting Started
+## Setup
 
-1. **Fork the repository** on GitHub.
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/SocialENS.git
-   cd SocialENS
-   ```
-3. **Install dependencies**:
-   ```bash
-   yarn install
-   ```
-4. **Set up environment variables**:
-   - Copy `.env.example` to `.env.local`
-   - Add your `NEXT_PUBLIC_SEPOLIA_RPC_URL` (Alchemy or Infura)
-5. **Run the development server**:
-   ```bash
-   yarn start
-   ```
+```bash
+pnpm install
+cp .env.example web/.env.local
+```
 
-## 🤝 How to contribute
+Fill in `web/.env.local` for your network. Never commit a private key: the demo scripts read
+keys from the shell environment only.
 
-### Reporting Bugs
-- Open an issue on GitHub.
-- clearly describe the issue, including steps to reproduce.
+## Everyday commands
 
-### Suggesting Enhancements
-- Open an issue describing your idea.
-- Explain why this enhancement would be useful.
+```bash
+pnpm dev                 # next dev for the web app
+pnpm build               # next build
+pnpm lint                # next lint
+pnpm check-types         # tsc --noEmit
+pnpm format              # prettier --write
 
-### Pull Requests
-1. Create a new branch: `git checkout -b feature/amazing-feature`
-2. Make your changes.
-3. Commit your changes: `git commit -m 'feat: Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request.
+cd contract && cargo test --lib          # unit tests, no node needed
+cd contract && cargo test                # sandbox tests (Linux or macOS)
+bash scripts/create-accounts.sh          # testnet accounts
+bash scripts/deploy.sh                   # build and deploy the contract
+node demo/social-loop.mjs                # profile -> post -> follow -> read -> tip
+node demo/measure.mjs                    # gas, fees, and confirmation latency
+```
 
-## 📝 Code Style
+Sandbox tests download and run a local NEAR node, which is supported on Linux and macOS only.
+On other hosts, run `cargo test --lib` for the pure unit tests and leave the sandbox suite to
+CI or the deployment box.
 
-- We use **Prettier** for code formatting.
-- Ensure your code follows the existing style and conventions.
-- Use descriptive variable and function names.
+## Code style
 
-## 📜 License
+- TypeScript: strict mode, `~~/` path alias for `web/`, Prettier defaults from
+  `web/.prettierrc.js`.
+- Rust: `cargo fmt` and `cargo clippy` with the pinned toolchain.
+- Keep the contract's storage accounting intact: flush lazy collections before measuring
+  `storage_usage`, and compare `NearToken` values instead of raw `u128` when a token amount
+  is involved.
+- Documentation in prose must not claim a measured number that was not produced by
+  `demo/measure.mjs`.
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+## Pull requests
+
+1. Create a branch.
+2. Keep one logical change per pull request.
+3. Run the commands above that apply to the files you touched.
+4. Describe what changed and how you verified it.
+
+## License
+
+By contributing you agree that your contribution is licensed under the MIT License in
+[`LICENSE`](./LICENSE). Reused origin code and the origin's application baseline are disclosed in
+[`ATTRIBUTION.md`](./ATTRIBUTION.md) and [`NOTICE`](./NOTICE).

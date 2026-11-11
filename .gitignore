@@ -1,49 +1,37 @@
 # dependencies
-node_modules
+node_modules/
+.pnpm-store/
+pnpm-lock.yaml
 
-# yarn
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-yarn-error.log
+# next.js
+.next/
+out/
+.vercel/
 
-# eslint
-.eslintcache
+# rust / cargo-near
+contract/target/
+contract/Cargo.lock
+target/
 
-# misc
-.DS_Store
-*.log
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-
-# build outputs
-dist
-.next
-out
-build
-
-# Environment variables (keep secrets safe!)
+# local env files: keep secrets out of the repository
 .env
 .env.local
-.env*.local
-.env.production.local
-.env.development.local
+.env.*.local
 
-# TypeScript
+# logs and tooling
+*.log
+*.exit
+pnpm-debug.log*
+.eslintcache
+coverage/
+
+# typescript
 *.tsbuildinfo
 
-# Vercel
-.vercel
-
-# Testing
-coverage
-
-# OS
+# os / editors
+.DS_Store
 Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo

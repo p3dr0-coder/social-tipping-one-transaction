@@ -41,4 +41,5 @@ near contract deploy "$ACCOUNT" \
   prepaid-gas '100 Tgas' attached-deposit '0 NEAR' \
   network-config "$NETWORK" sign-with-keychain send
 
-near view "$ACCOUNT" get_default_tip '{}' --network-id "$NETWORK"
+near contract call-function as-read-only "$ACCOUNT" get_default_tip json-args '{}' \
+  network-config "$NETWORK" now

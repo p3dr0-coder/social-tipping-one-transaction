@@ -39,8 +39,8 @@ create_child() {
     echo "create-accounts: $account already exists"
     return
   fi
-  # Sub-accounts are funded by their parent account.
-  near create-account "$account" --use-account "$PARENT" --network-id "$NETWORK" --initial-balance 0.1
+  # Five SocialDB writes at 0.05 NEAR each need 0.25; fund 0.5 for gas headroom.
+  near create-account "$account" --use-account "$PARENT" --network-id "$NETWORK" --initial-balance 0.5
 }
 
 create_parent

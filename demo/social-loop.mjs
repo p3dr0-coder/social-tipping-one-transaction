@@ -410,7 +410,7 @@ async function runTestnet() {
   console.log(`philia zero-funds loop on ${RPC_URL}`);
   console.log(`  alice ${alice}`);
   console.log(`  bob   ${bob}`);
-  await waitForFunds(alice, 100_000_000_000_000_000_000_000n);
+  await waitForFunds(alice, 300_000_000_000_000_000_000_000n);
   console.log("1. profile");
   await socialSet({ profile: { name: "Alice", description: "philia demo account" } });
 

@@ -1,7 +1,7 @@
 # dependencies
 node_modules/
 .pnpm-store/
-pnpm-lock.yaml
+# Lockfiles are committed so the clean-room install/build is reproducible.
 
 # next.js
 .next/
@@ -10,7 +10,6 @@ out/
 
 # rust / cargo-near
 contract/target/
-contract/Cargo.lock
 target/
 
 # local env files: keep secrets out of the repository

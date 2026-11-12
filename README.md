@@ -80,8 +80,16 @@ node demo/social-loop.mjs
 
 Expected result, printed transaction by transaction: **a post indexed + a tip settled**, with
 the profile write, post write, follow edge, feed/follower reads, and the NEP-141 transfer each
-reported by hash. The script refuses to run when a variable is missing or when the target
-looks like mainnet.
+reported by hash. The script refuses to run when a variable is missing or when the RPC/account
+ids do not belong to the selected network.
+
+The mainnet social path spends real funds. It writes `__fastdata_kv` to `social`, confirms
+`/v1/tx`, and reads api2; the tip runs only when `TIP_FT`, `BOB_ACCOUNT` and `PHILIA_CONTRACT`
+are also set:
+
+```bash
+PHILIA_NETWORK=mainnet ALICE_ACCOUNT=you.near ALICE_PRIVATE_KEY=... node demo/social-loop.mjs
+```
 
 ## `CodeDoesNotExist` is success
 
@@ -90,7 +98,8 @@ looks like mainnet.
 not retry that answer. It extracts the transaction hash, polls
 `https://api2.near.social/v1/tx/{hash}` every 1.5 seconds, and reports the write as done only
 when `indexed` is `true` **and** every `actions[].keys[].status` is `ok`. A key that comes back
-`invalid`, `rate_limited`, `key_too_long`, or `value_too_large`, or an action that comes back
+`invalid`, `ignored` (a key the indexer does not know), `rate_limited`, `key_too_long`, or
+`value_too_large`, or an action that comes back
 `too_many_keys`, `invalid_json`, or `invalid_borsh`, is surfaced to the UI with the key and
 status that failed. The endpoint keeps roughly the last 200k transactions, so confirmation is
 prompt and a stale hash is reported as such instead of being retried.
@@ -112,6 +121,52 @@ FastData enforces these per UTC day (over-quota writes return `rate_limited`):
 | Transaction size | 1.5 MiB |
 
 Edits and deletes keep public history. Avatars are capped at 1 MiB per FastFS upload.
+
+## Tip assets and fees
+
+A tip is one NEP-141 `ft_transfer`, so the token is fixed per tips-contract deployment. In order
+of preference:
+
+| Path | Asset | Decimals | Use |
+|---|---|---|---|
+| Production | Circle native USDC — mainnet `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`, testnet `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af` | 6 | Mainnet, and testnet when Circle faucet USDC is available |
+| Zero-funds fallback | `wrap.testnet` (wrapped NEAR) | 24 | Testnet when no USDC is available; faucet NEAR → `near_deposit` |
+| Last resort | Self-deployed NEP-141 at `tip.philia.testnet` | deployment-defined | When neither token above can be used |
+
+Use the Circle-listed native USDC accounts, never bridged USDC.e: USDC.e is not redeemable
+through Circle. The app reads `get_tip_token()` for the account and decimals bound at deploy;
+it does not assume 6 everywhere.
+
+Before the first transfer to an author, the app reads `storage_balance_of`. A `null` result
+means the author is unregistered, and the registration attaches the token's own
+`storage_balance_bounds.min`. Never attach a remembered `0.00125`: that is the example FT's
+minimum, not USDC's.
+
+wNEAR fallback on testnet (near-cli-rs; deploy the contract with `decimals=24` and
+`NEXT_PUBLIC_PHILIA_TIP_FT=wrap.testnet`):
+
+```bash
+near call wrap.testnet near_deposit '{}' --deposit 1 --use-account alice.philia.testnet --network-id testnet
+near call wrap.testnet storage_deposit '{"account_id":"bob.philia.testnet"}' --deposit 0.00125 --use-account alice.philia.testnet --network-id testnet
+near call wrap.testnet ft_transfer '{"receiver_id":"bob.philia.testnet","amount":"1000000000000000000000000"}' --deposit-yocto 1 --use-account alice.philia.testnet --network-id testnet
+```
+
+The optional cross-chain tip path uses 1Click (`POST /v0/quote` with `destinationAsset` set to
+the native USDC asset id `nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1` and
+`dry: true` for a preview). Fees are 25 bps for unauthenticated quotes, 20 bps authenticated,
+and 1 bp for stablecoin pairs; the "0.2%" figure is the authenticated default. Swaps settle
+confidentially by default since 2026-10-27, so `GET /v0/status?depositAddress=…` may report
+`nearTxHashes` that are shield/unshield transactions rather than a public swap hash.
+`SUCCESS` is the only success state; `REFUNDED`, `FAILED`, and `INCOMPLETE_DEPOSIT` are
+terminal failures that carry the refund reason.
+
+The app's function-call access key signs only zero-deposit calls to `__fastdata_kv` and
+`__fastdata_fastfs`. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` (variable) therefore
+always fall back to wallet signing; the access-key allowance is not a spend limit.
+
+NEAR accounts are not people. FastData quotas are per-account daily rate limits, not proof of
+uniqueness: one person can hold many accounts, and one account can be shared. philia makes no
+sybil-resistance claim — the quotas bound spam per account and nothing more.
 
 ## Numbers
 
@@ -148,6 +203,9 @@ generated from the Scaffold-ETH 2 baseline; that disclosure is in [`NOTICE`](./N
   wallet signing. This is expected behavior, not a failure.
 - **Avatars are capped at 1 MiB.** Larger media is uploaded as 1 MiB `Partial` chunks
   (reassembled up to 32 MiB); avatars stay on the single-transaction `Simple` path.
+- **Reputation tiers are derived, not stored.** The UI reads `counts.followers` from
+  `/v1/accounts/{id}` and labels ≥10 / ≥100 / ≥1,000 followers; no tier exists in the tips
+  contract or any other on-chain state.
 
 ## Development commands
 

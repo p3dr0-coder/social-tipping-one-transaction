@@ -25,7 +25,7 @@ if ! command -v near >/dev/null 2>&1; then
   exit 1
 fi
 
-WASM="$CONTRACT_DIR/target/near/philia-tips.wasm"
+WASM="$CONTRACT_DIR/target/near/philia_tips.wasm"
 INIT_ARGS="$(printf '{"default_tip":"0.1","ft_account_id":"%s","decimals":%s,"owner_id":"%s"}' "$TIP_FT" "$DECIMALS" "$ACCOUNT")"
 
 (
@@ -41,4 +41,4 @@ near contract deploy "$ACCOUNT" \
   prepaid-gas '100 Tgas' attached-deposit '0 NEAR' \
   network-config "$NETWORK" sign-with-keychain send
 
-near view "$ACCOUNT" get_default_tip '{}' --networkId "$NETWORK"
+near view "$ACCOUNT" get_default_tip '{}' --network-id "$NETWORK"

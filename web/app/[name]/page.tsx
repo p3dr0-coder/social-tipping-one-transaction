@@ -52,7 +52,11 @@ export default function AccountPage() {
     setPosts([]);
     setCursor(null);
 
-    Promise.all([fetchAccount(accountId, viewerId), fetchAccountPosts(accountId), getTipPreference(accountId)])
+    Promise.all([
+      fetchAccount(accountId, viewerId),
+      fetchAccountPosts(accountId, undefined, undefined, viewerId ?? undefined),
+      getTipPreference(accountId),
+    ])
       .then(([nextProfile, page, preference]) => {
         if (cancelled) return;
         setProfile(nextProfile);
@@ -76,7 +80,7 @@ export default function AccountPage() {
     if (!cursor) return;
     setLoadingMore(true);
     try {
-      const page = await fetchAccountPosts(accountId, cursor);
+      const page = await fetchAccountPosts(accountId, cursor, undefined, viewerId ?? undefined);
       setPosts(previous => {
         const seen = new Set(previous.map(item => item.post.key));
         return [...previous, ...page.items.filter(item => !seen.has(item.post.key))];
@@ -87,7 +91,7 @@ export default function AccountPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [accountId, cursor]);
+  }, [accountId, cursor, viewerId]);
 
   const tipAuthor = async () => {
     if (!viewerId) {

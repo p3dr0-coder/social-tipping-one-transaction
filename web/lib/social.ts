@@ -31,6 +31,9 @@ export type Post = {
   text: string;
   created_at?: number | null;
   block_height: number;
+  // Present only when a feed request carried `?viewer=`: api2 adds per-viewer flags.
+  // `following`/`followed_by` are profile-level and live on AccountProfile/AccountCard.
+  viewer?: { liked?: boolean; reposted?: boolean };
 };
 
 export type FeedItem = {
@@ -213,13 +216,19 @@ function assertWriteBudget(data: Record<string, unknown>): void {
   if (keys.length > QUOTAS.keysPerTx) {
     throw new Error(`a single write carries at most ${QUOTAS.keysPerTx} keys`);
   }
+  // Limits are bytes, not UTF-16 code units; multi-byte text must not slip past them.
+  const encoder = new TextEncoder();
   for (const key of keys) {
-    if (key.length > QUOTAS.keyBytes) {
+    if (encoder.encode(key).byteLength > QUOTAS.keyBytes) {
       throw new Error(`key "${key}" exceeds ${QUOTAS.keyBytes} bytes`);
     }
-    if (JSON.stringify(data[key]).length > QUOTAS.valueBytes) {
+    if (encoder.encode(JSON.stringify(data[key]) ?? "").byteLength > QUOTAS.valueBytes) {
       throw new Error(`the value for "${key}" exceeds ${QUOTAS.valueBytes} bytes`);
     }
+  }
+  const txBytes = encoder.encode(JSON.stringify(data)).byteLength;
+  if (txBytes > QUOTAS.txBytes) {
+    throw new Error(`the write is ${txBytes} bytes; a transaction carries at most ${QUOTAS.txBytes}`);
   }
 }
 
@@ -310,8 +319,12 @@ export async function confirmTx(hash: string, options: ConfirmTxOptions = {}): P
         throw new Error(`indexer returned an unexpected response for ${hash}`);
       }
       if (payload.indexed) {
-        const actions = payload.actions ?? [];
-        const failedAction = actions.find(action => action.status !== undefined && action.status !== "ok");
+        const actions = payload.actions;
+        if (!Array.isArray(actions) || actions.length === 0) {
+          // `indexed:true` without actions is not proof that a key was applied.
+          throw new Error(`social write ${hash} was indexed but the indexer reported no actions`);
+        }
+        const failedAction = actions.find(action => action.status !== "ok");
         if (failedAction) {
           throw new Error(
             `social write ${hash} was indexed but the ${failedAction.kind ?? "unknown"} action reported ${failedAction.status}`,
@@ -379,16 +392,24 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit ?? 20, 1), 100);
 }
 
-export function fetchGlobalFeed(cursor?: string, limit?: number): Promise<FeedPage<FeedItem>> {
+// `viewer` is the signed-in account: api2 then adds `viewer.liked` / `viewer.reposted` to each
+// post. The testnet SocialDB adapter has no per-viewer flags and ignores the argument.
+export function fetchGlobalFeed(cursor?: string, limit?: number, viewer?: string): Promise<FeedPage<FeedItem>> {
   if (nearConfig.network === "testnet") return testnetActivityFeed(clampLimit(limit));
-  return fetchJson<FeedPage<FeedItem>>("/v1/feed/global", { limit: clampLimit(limit), cursor });
+  return fetchJson<FeedPage<FeedItem>>("/v1/feed/global", { limit: clampLimit(limit), cursor, viewer });
 }
 
-export function fetchFollowingFeed(accountId: string, cursor?: string, limit?: number): Promise<FeedPage<FeedItem>> {
+export function fetchFollowingFeed(
+  accountId: string,
+  cursor?: string,
+  limit?: number,
+  viewer?: string,
+): Promise<FeedPage<FeedItem>> {
   if (nearConfig.network === "testnet") return testnetAccountFeed(accountId, clampLimit(limit));
   return fetchJson<FeedPage<FeedItem>>(`/v1/feed/following/${encodeURIComponent(accountId)}`, {
     limit: clampLimit(limit),
     cursor,
+    viewer,
   });
 }
 
@@ -414,11 +435,17 @@ export async function fetchAccount(accountId: string, viewer?: string | null): P
   };
 }
 
-export function fetchAccountPosts(accountId: string, cursor?: string, limit?: number): Promise<FeedPage<FeedItem>> {
+export function fetchAccountPosts(
+  accountId: string,
+  cursor?: string,
+  limit?: number,
+  viewer?: string,
+): Promise<FeedPage<FeedItem>> {
   if (nearConfig.network === "testnet") return testnetAccountFeed(accountId, clampLimit(limit));
   return fetchJson<FeedPage<FeedItem>>(`/v1/accounts/${encodeURIComponent(accountId)}/posts`, {
     limit: clampLimit(limit),
     cursor,
+    viewer,
   });
 }
 
@@ -502,6 +529,10 @@ export async function isFollowing(target: string, viewer: string): Promise<boole
 export function streamUpdates(onBlock: (block: StreamBlock) => void): () => void {
   if (typeof window === "undefined" || typeof EventSource === "undefined") {
     // No stream exists during server rendering, so there is nothing to close.
+    return () => {};
+  }
+  if (nearConfig.network === "testnet") {
+    // api2 is mainnet-only; the testnet SocialDB adapter has no equivalent SSE endpoint.
     return () => {};
   }
   const source = new EventSource(`${nearConfig.socialApiBase}/v1/stream`);

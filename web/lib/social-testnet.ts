@@ -25,7 +25,8 @@ export function getTestnetSocial(): Social {
 
 const SOCIALDB_WRITE_GAS = teraToGas("100").toString();
 // SocialDB keeps any surplus as the writer's storage balance; the deposit is not a fee.
-const SOCIALDB_STORAGE_DEPOSIT = "10000000000000000000000";
+// `storage_balance_bounds.min` on v1.social08.testnet is 0.02 NEAR; 0.05 leaves headroom.
+const SOCIALDB_STORAGE_DEPOSIT = "50000000000000000000000";
 
 function transactionHash(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;

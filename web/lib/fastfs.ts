@@ -278,8 +278,12 @@ export async function uploadMedia(
     }
   }
 
-  const chunks = Math.ceil(content.byteLength / CHUNK_BYTES);
-  await waitForGateway(accountId, options.relativePath, GATEWAY_POLL_TIMEOUT_MS + chunks * 2_000);
+  if (nearConfig.network === "mainnet") {
+    // `main.fastfs.io` serves mainnet `social` writes only; testnet writes have no public
+    // gateway equivalent, so polling it there would report a false failure.
+    const chunks = Math.ceil(content.byteLength / CHUNK_BYTES);
+    await waitForGateway(accountId, options.relativePath, GATEWAY_POLL_TIMEOUT_MS + chunks * 2_000);
+  }
   return `fastfs://${accountId}/social/${options.relativePath}`;
 }
 

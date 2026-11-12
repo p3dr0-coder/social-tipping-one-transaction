@@ -7,7 +7,7 @@ import { Avatar } from "./Avatar";
 import { FollowButton } from "./FollowButton";
 import { useNear } from "~~/lib/near-provider";
 import { fetchAccount, reputationFor, type Post } from "~~/lib/social";
-import { sendTip } from "~~/lib/tips";
+import { getDefaultTip, sendTip } from "~~/lib/tips";
 import { notification } from "~~/utils/notification";
 
 type CastCardProps = {
@@ -19,6 +19,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
   const { accountId, signAndSendTransaction } = useNear();
   const [followers, setFollowers] = useState<number | null>(null);
   const [tipping, setTipping] = useState(false);
+  const [defaultTip, setDefaultTip] = useState<string | null>(null);
 
   const authorId = post.author.account_id;
   const isSelf = accountId === authorId;
@@ -26,9 +27,11 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
 
   useEffect(() => {
     let cancelled = false;
-    fetchAccount(authorId)
-      .then(profile => {
-        if (!cancelled) setFollowers(profile.followers);
+    Promise.all([fetchAccount(authorId, accountId), getDefaultTip().catch(() => null)])
+      .then(([profile, suggested]) => {
+        if (cancelled) return;
+        setFollowers(profile.followers);
+        setDefaultTip(suggested);
       })
       .catch(() => {
         if (!cancelled) setFollowers(null);
@@ -36,7 +39,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
     return () => {
       cancelled = true;
     };
-  }, [authorId]);
+  }, [authorId, accountId]);
 
   const tipAuthor = async () => {
     if (!accountId) {
@@ -100,7 +103,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
                   onClick={tipAuthor}
                   disabled={tipping}
                   className="relative overflow-hidden rounded-full font-bold tracking-wide px-3 py-1 text-[10px] h-6 min-w-[65px] bg-secondary text-secondary-content shadow-lg hover:scale-105 active:scale-95 border border-base-content/10 flex items-center justify-center gap-1.5"
-                  title={`Send a tip to ${authorId}`}
+                  title={`${defaultTip ? `Suggested ${defaultTip}; ` : ""}send a tip to ${authorId}`}
                 >
                   {tipping ? <span className="loading loading-spinner loading-xs" /> : <span>Tip</span>}
                 </button>

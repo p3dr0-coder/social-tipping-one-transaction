@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CastCard } from "./CastCard";
+import { useNear } from "~~/lib/near-provider";
 import { fetchGlobalFeed, streamUpdates, type FeedItem } from "~~/lib/social";
 
 type LoadMode = "initial" | "refresh" | "more";
 
 export const Feed = () => {
+  const { accountId } = useNear();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,11 @@ export const Feed = () => {
     if (mode === "more") setLoadingMore(true);
 
     try {
-      const page = await fetchGlobalFeed(mode === "more" ? (cursorRef.current ?? undefined) : undefined);
+      const page = await fetchGlobalFeed(
+        mode === "more" ? (cursorRef.current ?? undefined) : undefined,
+        undefined,
+        accountId ?? undefined,
+      );
       if (requestRef.current !== requestId) return;
 
       cursorRef.current = page.next_cursor;
@@ -51,7 +57,7 @@ export const Feed = () => {
         setLoadingMore(false);
       }
     }
-  }, []);
+  }, [accountId]);
 
   useEffect(() => {
     void load("initial");

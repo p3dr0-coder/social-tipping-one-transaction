@@ -150,7 +150,7 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
               },
               {
                 q: "What does posting cost?",
-                a: "One 1 Tgas function call to the social receiver with no attached deposit. The indexer quotes the gas and fee it observed in demo/measure.mjs.",
+                a: "One 1 Tgas function call to the social receiver with no attached deposit. Run demo/measure.mjs to record the gas and fee the chain reports for your own posts.",
               },
               {
                 q: "Where does the social data live?",

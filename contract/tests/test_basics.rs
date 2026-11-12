@@ -16,6 +16,11 @@
 //!    is worth more than the call's gas, so the balance grows;
 //! 6. `set_default_tip` is owner-only.
 //!
+//! A second test starts its own sandbox on a 6-decimal deployment — the production USDC binding
+//! — and covers the doc's counterexamples: removing a preference that was never stored is a
+//! no-op, the owner cannot install a default the deployment cannot express in base units, and
+//! removal is scoped to the caller instead of touching another account's entry.
+//!
 //! Nothing in this contract reads the clock or a block height, so no case here is
 //! time-dependent and `sandbox.fast_forward` is intentionally not used (row S13-05 is N/A).
 //!
@@ -111,6 +116,38 @@ async fn set_preference(
         deposit,
     )
     .await
+}
+
+/// Builds and deploys `philia-tips` under `owner_id` with its init call.
+async fn deploy_contract(
+    network: &NetworkConfig,
+    owner_id: &AccountId,
+    owner_signer: &Arc<Signer>,
+    default_tip: &str,
+    decimals: u8,
+) -> Result<()> {
+    let wasm_path = cargo_near_build::build_with_cli(Default::default())
+        .map_err(|error| anyhow::anyhow!("build philia-tips wasm: {error}"))?;
+    let wasm = std::fs::read(wasm_path).context("read the built philia-tips wasm")?;
+
+    Contract::deploy(owner_id.clone())
+        .use_code(wasm)
+        .with_init_call(
+            "new",
+            json!({
+                "default_tip": default_tip,
+                "ft_account_id": FT_ACCOUNT,
+                "decimals": decimals,
+                "owner_id": owner_id.to_string(),
+            }),
+        )
+        .context("encode the init call")?
+        .with_signer(Arc::clone(owner_signer))
+        .send_to(network)
+        .await
+        .context("deploy philia-tips")?
+        .assert_success();
+    Ok(())
 }
 
 #[tokio::test]
@@ -367,6 +404,141 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         tip_preference(&network, &owner_id, &alice_id).await?,
         "0.2",
         "the fallback follows the new default"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn removal_scope_and_default_validation_counterexamples() -> Result<()> {
+    let sandbox = Sandbox::start_sandbox().await.context("start near sandbox")?;
+    let network = NetworkConfig::from_rpc_url(
+        "sandbox",
+        sandbox.rpc_addr.parse().context("parse the sandbox RPC address")?,
+    );
+
+    let owner_id: AccountId = DEFAULT_GENESIS_ACCOUNT.as_str().parse().context("parse the genesis account id")?;
+    let owner_signer = Signer::from_secret_key(
+        DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY
+            .parse()
+            .context("parse the sandbox genesis key")?,
+    )?;
+
+    // A 6-decimal deployment, matching the Circle USDC binding this contract ships against, so
+    // the seven-fractional-digit default below is more precise than the deployment can express.
+    deploy_contract(&network, &owner_id, &owner_signer, DEFAULT_TIP, 6).await?;
+    let token: Data<(String, u8)> = Contract(owner_id.clone())
+        .call_function("get_tip_token", json!({}))
+        .read_only()
+        .fetch_from(&network)
+        .await
+        .context("view get_tip_token")?;
+    assert_eq!(
+        token.data,
+        (FT_ACCOUNT.to_string(), 6),
+        "the invalid default below is only invalid against six decimals"
+    );
+
+    // Two accounts: alice stores a preference, bob never does.
+    let alice_id: AccountId = format!("alice.{owner_id}")
+        .parse()
+        .context("build alice's sub-account id")?;
+    let alice_secret = generate_secret_key()?;
+    Account::create_account(alice_id.clone())
+        .fund_myself(owner_id.clone(), NearToken::from_near(10))
+        .with_public_key(alice_secret.public_key())
+        .with_signer(owner_signer.clone())
+        .send_to(&network)
+        .await
+        .context("create alice")?
+        .assert_success();
+    let alice_signer = Signer::from_secret_key(alice_secret)?;
+
+    let bob_id: AccountId = format!("bob.{owner_id}")
+        .parse()
+        .context("build bob's sub-account id")?;
+    let bob_secret = generate_secret_key()?;
+    Account::create_account(bob_id.clone())
+        .fund_myself(owner_id.clone(), NearToken::from_near(10))
+        .with_public_key(bob_secret.public_key())
+        .with_signer(owner_signer.clone())
+        .send_to(&network)
+        .await
+        .context("create bob")?
+        .assert_success();
+    let bob_signer = Signer::from_secret_key(bob_secret)?;
+
+    // 1. Removing a preference that was never stored is a no-op, not an error: there is no
+    //    record to delete, nothing is refunded, and the view still answers with the default.
+    call(
+        &network,
+        &owner_id,
+        &bob_id,
+        &bob_signer,
+        "remove_tip_preference",
+        json!({}),
+        NearToken::from_yoctonear(0),
+    )
+    .await
+    .context("remove a preference bob never set")?;
+    assert_eq!(
+        tip_preference(&network, &owner_id, &bob_id).await?,
+        DEFAULT_TIP,
+        "a no-op removal must leave the default fallback in place"
+    );
+
+    // 2. The owner cannot install a default the deployment cannot price: seven fractional
+    //    digits exceed the six decimals bound at init. The outcome is intentionally not
+    //    asserted as successful — it may fail at submission or at execution — and only the
+    //    stored default matters.
+    let _rejected = Contract(owner_id.clone())
+        .call_function("set_default_tip", json!({ "amount": "0.0000001" }))
+        .transaction()
+        .with_signer(owner_id.clone(), owner_signer.clone())
+        .send_to(&network)
+        .await;
+    assert_eq!(
+        view_string(&network, &owner_id, "get_default_tip", json!({})).await?,
+        DEFAULT_TIP,
+        "an over-precise default must be rejected before it replaces the stored one"
+    );
+
+    // 3. Removal is scoped to the predecessor: bob removing his (still missing) preference must
+    //    not touch alice's stored one, which falls back to the default if it is deleted.
+    set_preference(
+        &network,
+        &owner_id,
+        &alice_id,
+        &alice_signer,
+        "0.2",
+        NearToken::from_millinear(10),
+    )
+    .await?;
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        "0.2",
+        "alice's funded write stores her preference"
+    );
+    call(
+        &network,
+        &owner_id,
+        &bob_id,
+        &bob_signer,
+        "remove_tip_preference",
+        json!({}),
+        NearToken::from_yoctonear(0),
+    )
+    .await
+    .context("removal from another account failed")?;
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        "0.2",
+        "a removal only deletes the caller's own entry"
+    );
+    assert_eq!(
+        tip_preference(&network, &owner_id, &bob_id).await?,
+        DEFAULT_TIP,
+        "bob's missing entry still falls back to the default"
     );
 
     Ok(())

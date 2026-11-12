@@ -35,5 +35,6 @@ export const nearConfig = {
   socialApiBase: "https://api2.near.social",
   fastfsGateway: "https://main.fastfs.io",
   oneClickQuoteUrl: "https://1click.chaindefuser.com/v0/quote",
+  oneClickTokensUrl: "https://1click.chaindefuser.com/v0/tokens",
   mainnetUsdcAssetId: MAINNET_USDC_ASSET_ID,
 } as const;

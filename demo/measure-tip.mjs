@@ -10,6 +10,7 @@
  * No keys are stored in this file; nothing runs on mainnet.
  */
 import { Account, JsonRpcProvider, actions, teraToGas } from "near-api-js";
+import { createRpc, parseUnits } from "./lib/near-rpc.mjs";
 
 const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.fastnear.com";
 const NETWORK = (process.env.PHILIA_NETWORK ?? "testnet").trim().toLowerCase();
@@ -27,30 +28,7 @@ for (const name of ["ALICE_ACCOUNT", "ALICE_PRIVATE_KEY", "BOB_ACCOUNT", "TIP_FT
 }
 if (/mainnet/i.test(RPC_URL) || process.env.ALICE_ACCOUNT.endsWith(".near")) fail("mainnet target refused");
 
-let requestId = 0;
-async function rpc(method, params) {
-  requestId += 1;
-  const response = await fetch(RPC_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: requestId, method, params }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`${RPC_URL} HTTP ${response.status}`);
-  const body = await response.json();
-  if (body.error) throw new Error(`${method}: ${body.error.message ?? JSON.stringify(body.error)}`);
-  return body.result;
-}
-
-function parseUnits(amount, decimals) {
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(amount);
-  if (!match) throw new Error(`invalid amount ${amount}`);
-  const integer = match[1];
-  const fraction = match[2] ?? "";
-  if (integer !== "0" && integer.startsWith("0")) throw new Error("leading zeros");
-  if (fraction.length > decimals) throw new Error(`more than ${decimals} decimals`);
-  return BigInt(integer) * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
-}
+const rpc = createRpc(RPC_URL);
 
 function outcomeFee(outcome) {
   const gas = BigInt(outcome?.gas_burnt ?? 0);

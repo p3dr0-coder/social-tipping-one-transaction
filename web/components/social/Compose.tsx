@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useNear } from "~~/lib/near-provider";
-import { createPost } from "~~/lib/social";
+import { createPost, QUOTAS } from "~~/lib/social";
 import { notification } from "~~/utils/notification";
 
 export const Compose = () => {
@@ -41,8 +41,7 @@ export const Compose = () => {
       />
 
       <p role="note" className="px-2 pb-3 text-xs leading-relaxed opacity-50">
-        FastData allows 300 posts/day and up to 25,000 characters per post; this composer keeps the 280-character
-        limit. Edits and deletes stay in the public transaction history.
+        {`FastData allows ${QUOTAS.postsPerDay} posts/day and up to ${QUOTAS.maxPostChars.toLocaleString()} characters per post; this composer keeps the 280-character limit. Edits and deletes stay in the public transaction history.`}
       </p>
 
       <div className="flex justify-between items-center pt-4 border-t border-white/5">

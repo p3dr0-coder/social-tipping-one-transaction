@@ -1,19 +1,11 @@
 "use client";
 
-import { JsonRpcProvider } from "near-api-js";
+import type { ConnectorAction } from "@hot-labs/near-connect";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { nearConfig } from "~~/near.config";
 
-export type FunctionCallAction = {
-  type: "FunctionCall";
-  params: {
-    methodName: string;
-    args: Record<string, unknown>;
-    gas: string;
-    deposit: string;
-  };
-};
+export type FunctionCallAction = Extract<ConnectorAction, { type: "FunctionCall" }>;
 
 /**
  * A near-js style function-call action. Borsh payloads (FastFS uploads) cannot be expressed as
@@ -73,11 +65,7 @@ type Connector = {
   providers?: { mainnet?: string[]; testnet?: string[] };
 };
 
-export type ViewRequest = {
-  contractId: string;
-  method: string;
-  args?: Record<string, unknown>;
-};
+
 
 type NearContextValue = {
   accountId: string | null;
@@ -86,19 +74,11 @@ type NearContextValue = {
   disconnect: () => Promise<void>;
   signAndSendTransaction: (params: SignAndSendTransactionParams) => Promise<unknown>;
   signMessage: (params: SignMessageParams) => Promise<SignedWalletMessage>;
-  viewFunction: (request: ViewRequest) => Promise<unknown>;
 };
 
 const NearContext = createContext<NearContextValue | null>(null);
 
-let rpcProvider: JsonRpcProvider | null = null;
 
-function getRpcProvider(): JsonRpcProvider {
-  if (!rpcProvider) {
-    rpcProvider = new JsonRpcProvider({ url: nearConfig.rpcUrl });
-  }
-  return rpcProvider;
-}
 
 export function NearProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -198,17 +178,7 @@ export function NearProvider({ children }: { children: ReactNode }) {
     return signer(params);
   }, []);
 
-  const viewFunction = useCallback(async (request: ViewRequest) => {
-    const result = await getRpcProvider().callFunction({
-      contractId: request.contractId,
-      method: request.method,
-      args: request.args ?? {},
-    });
-    if (result === undefined) {
-      throw new Error(`${request.method} on ${request.contractId} returned no value`);
-    }
-    return result;
-  }, []);
+
 
   const value = useMemo<NearContextValue>(
     () => ({
@@ -218,9 +188,8 @@ export function NearProvider({ children }: { children: ReactNode }) {
       disconnect,
       signAndSendTransaction,
       signMessage,
-      viewFunction,
     }),
-    [accountId, connector, connect, disconnect, signAndSendTransaction, signMessage, viewFunction],
+    [accountId, connector, connect, disconnect, signAndSendTransaction, signMessage],
   );
 
   return <NearContext.Provider value={value}>{children}</NearContext.Provider>;

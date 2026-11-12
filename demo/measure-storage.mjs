@@ -15,6 +15,13 @@
  * goes to stderr; the JSON summary goes to stdout; any failed sample exits non-zero.
  */
 import { Account, JsonRpcProvider, actions, teraToGas } from "near-api-js";
+import {
+  createRpc,
+  describeError,
+  failureReason as failureReasonOf,
+  finalStatusName,
+  transactionHash,
+} from "./lib/near-rpc.mjs";
 
 const NETWORK = (process.env.PHILIA_NETWORK ?? "testnet").trim().toLowerCase();
 const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org";
@@ -95,81 +102,9 @@ if (signer.toLowerCase() === CONTRACT.toLowerCase()) {
 const provider = new JsonRpcProvider({ url: RPC_URL });
 const account = new Account(signer, provider, signerKey);
 
-let requestId = 0;
+const rpc = createRpc(RPC_URL);
 
-async function rpc(method, params) {
-  requestId += 1;
-  let response;
-  try {
-    response = await fetch(RPC_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: requestId, method, params }),
-      signal: AbortSignal.timeout(20_000),
-    });
-  } catch (error) {
-    throw new Error(`cannot reach ${RPC_URL}: ${error.message}`);
-  }
-  if (!response.ok) {
-    throw new Error(`${RPC_URL} returned HTTP ${response.status}`);
-  }
-  let body;
-  try {
-    body = await response.json();
-  } catch {
-    throw new Error(`${RPC_URL} returned a non-JSON response`);
-  }
-  if (body.error) {
-    throw new Error(`${method}: ${body.error.message ?? JSON.stringify(body.error)}`);
-  }
-  return body.result;
-}
 
-function transactionHash(value) {
-  if (!value || typeof value !== "object") return null;
-  const candidates = [
-    value.transaction_outcome?.id,
-    value.transaction?.hash,
-    value.transactionHash,
-    value.context?.transactionHash,
-    value.transactionResult?.transaction_outcome?.id,
-    value.result?.transaction_outcome?.id,
-    value.result?.transaction?.hash,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  }
-  return null;
-}
-
-function describeError(value) {
-  if (!value) return "no result";
-  if (typeof value === "string") return value;
-  const message = value.message ?? value.error?.message ?? value.cause?.message;
-  const status = value.status && typeof value.status === "object" ? JSON.stringify(value.status) : null;
-  if (message || status) return [message, status].filter(Boolean).join(": ");
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function finalStatusName(final) {
-  const status = final?.status;
-  if (!status || typeof status !== "object") return null;
-  return Object.keys(status)[0] ?? null;
-}
-
-function failureReasonOf(final) {
-  const status = final?.status;
-  if (!status || typeof status !== "object" || !("Failure" in status)) return null;
-  try {
-    return JSON.stringify(status.Failure);
-  } catch {
-    return "Failure";
-  }
-}
 
 async function viewFunction(methodName, args) {
   const result = await rpc("query", {

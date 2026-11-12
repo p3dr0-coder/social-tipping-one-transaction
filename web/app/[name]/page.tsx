@@ -18,7 +18,8 @@ import {
   type AccountProfile,
   type FeedItem,
 } from "~~/lib/social";
-import { getTipPreference, sendTip } from "~~/lib/tips";
+import { getTipPreference } from "~~/lib/tips";
+import { useTipAuthor } from "~~/lib/use-tip-author";
 import { notification } from "~~/utils/notification";
 
 export default function AccountPage() {
@@ -37,7 +38,11 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [modalType, setModalType] = useState<"followers" | "following" | null>(null);
   const [tipPreference, setTipPreference] = useState<string | null>(null);
-  const [tipping, setTipping] = useState(false);
+  const { tipAuthor, tipping } = useTipAuthor({
+    authorId: accountId,
+    viewerId,
+    signAndSendTransaction,
+  });
 
   useEffect(() => {
     if (!isValidAccountId(accountId)) {
@@ -92,22 +97,6 @@ export default function AccountPage() {
       setLoadingMore(false);
     }
   }, [accountId, cursor, viewerId]);
-
-  const tipAuthor = async () => {
-    if (!viewerId) {
-      notification.error("Connect a wallet first");
-      return;
-    }
-    setTipping(true);
-    try {
-      const hash = await sendTip(accountId, null, { accountId: viewerId, signAndSendTransaction });
-      notification.success(`Tip settled: ${hash.slice(0, 10)}...`);
-    } catch (cause) {
-      notification.error(cause instanceof Error ? cause.message : "The tip could not be sent");
-    } finally {
-      setTipping(false);
-    }
-  };
 
   const copyAccountId = async () => {
     await navigator.clipboard.writeText(accountId);

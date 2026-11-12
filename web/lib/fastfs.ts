@@ -3,11 +3,11 @@ import { nearConfig } from "~~/near.config";
 import { confirmTx, extractTxHash, type WalletConnection } from "./social";
 
 /** FastFS accepts a single-transaction `Simple` payload of at most 1 MiB. */
-export const MAX_AVATAR_BYTES = 1024 * 1024;
+const MAX_AVATAR_BYTES = 1024 * 1024;
 /** One `Partial` chunk, and the largest `Simple` payload, is 1 MiB. */
-export const CHUNK_BYTES = 1024 * 1024;
+const CHUNK_BYTES = 1024 * 1024;
 /** `Partial` uploads reassemble at most 32 MiB. */
-export const MAX_MEDIA_BYTES = 32 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 32 * 1024 * 1024;
 const MAX_RELATIVE_PATH_BYTES = 1024;
 const MAX_MIME_BYTES = 256;
 
@@ -38,7 +38,7 @@ function borshString(value: string | Uint8Array): Uint8Array {
  * `FastfsData::Simple`: enum tag `0x00`, the relative path, then the `Some` content tag
  * `0x01` with the mime type and the file bytes.
  */
-export function simpleFastfsPayload(relativePath: string, mimeType: string, content: Uint8Array): Uint8Array {
+function simpleFastfsPayload(relativePath: string, mimeType: string, content: Uint8Array): Uint8Array {
   assertRelativePath(relativePath);
   assertMimeType(mimeType);
   return concatBytes([
@@ -89,7 +89,7 @@ function assertMimeType(mimeType: string): void {
  * `s(mime_type)`, `s(content_chunk)`, u32-LE `nonce`, where `s(x)` is a u32-LE byte length
  * followed by the bytes. Every chunk of one upload repeats the same nonce.
  */
-export function partialFastfsPayload(
+function partialFastfsPayload(
   relativePath: string,
   mimeType: string,
   chunk: Uint8Array,
@@ -125,7 +125,7 @@ export function partialFastfsPayload(
   ]);
 }
 
-export async function sha256Hex(content: Uint8Array): Promise<string> {
+async function sha256Hex(content: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", content);
   return Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, "0"))

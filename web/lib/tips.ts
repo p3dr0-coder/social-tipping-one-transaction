@@ -45,18 +45,18 @@ export async function getTipToken(): Promise<TipToken> {
   return { ftAccountId, decimals };
 }
 
-export type StorageBounds = {
+type StorageBounds = {
   min: string;
   max: string | null;
 };
 
 /** Storage registration price read from the token itself; never a hardcoded amount. */
-export async function getStorageBounds(ftAccountId: string): Promise<StorageBounds> {
+async function getStorageBounds(ftAccountId: string): Promise<StorageBounds> {
   const bounds = await view<{ min: string; max: string | null }>(ftAccountId, "storage_balance_bounds");
   return { min: bounds.min, max: bounds.max };
 }
 
-export async function isRegistered(ftAccountId: string, accountId: string): Promise<boolean> {
+async function isRegistered(ftAccountId: string, accountId: string): Promise<boolean> {
   const balance = await view<{ total: string; available: string } | null>(ftAccountId, "storage_balance_of", {
     account_id: accountId,
   });

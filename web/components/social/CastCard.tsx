@@ -7,8 +7,8 @@ import { Avatar } from "./Avatar";
 import { FollowButton } from "./FollowButton";
 import { useNear } from "~~/lib/near-provider";
 import { fetchAccount, reputationFor, type Post } from "~~/lib/social";
-import { getDefaultTip, sendTip } from "~~/lib/tips";
-import { notification } from "~~/utils/notification";
+import { getDefaultTip } from "~~/lib/tips";
+import { useTipAuthor } from "~~/lib/use-tip-author";
 
 type CastCardProps = {
   post: Post;
@@ -18,12 +18,16 @@ type CastCardProps = {
 export const CastCard = ({ post, repostedBy }: CastCardProps) => {
   const { accountId, signAndSendTransaction } = useNear();
   const [followers, setFollowers] = useState<number | null>(null);
-  const [tipping, setTipping] = useState(false);
   const [defaultTip, setDefaultTip] = useState<string | null>(null);
 
   const authorId = post.author.account_id;
   const isSelf = accountId === authorId;
   const reputation = followers === null ? null : reputationFor(followers);
+  const { tipAuthor, tipping } = useTipAuthor({
+    authorId,
+    viewerId: accountId,
+    signAndSendTransaction,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -40,22 +44,6 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
       cancelled = true;
     };
   }, [authorId, accountId]);
-
-  const tipAuthor = async () => {
-    if (!accountId) {
-      notification.error("Connect a wallet first");
-      return;
-    }
-    setTipping(true);
-    try {
-      const hash = await sendTip(authorId, null, { accountId, signAndSendTransaction });
-      notification.success(`Tip settled: ${hash.slice(0, 10)}...`);
-    } catch (error) {
-      notification.error(error instanceof Error ? error.message : "The tip could not be sent");
-    } finally {
-      setTipping(false);
-    }
-  };
 
   return (
     <div className="glass-panel p-6 rounded-[1.5rem] transition-all duration-300 group relative overflow-hidden border border-base-content/5 hover:border-primary/30">

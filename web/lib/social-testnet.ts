@@ -3,6 +3,7 @@ import { Social } from "near-social-js";
 import type { IndexEntry } from "near-social-js";
 import { nearConfig } from "~~/near.config";
 import type { AccountCard, AccountProfile, FeedItem, FeedPage, Post, WalletConnection } from "./social";
+import { extractTxHash } from "./tx";
 
 /**
  * Testnet SocialDB adapter.
@@ -16,7 +17,7 @@ import type { AccountCard, AccountProfile, FeedItem, FeedPage, Post, WalletConne
 
 let client: Social | null = null;
 
-export function getTestnetSocial(): Social {
+function getTestnetSocial(): Social {
   if (!client) {
     client = new Social({ network: "testnet", contractId: nearConfig.socialDbContractId });
   }
@@ -28,22 +29,7 @@ const SOCIALDB_WRITE_GAS = teraToGas("100").toString();
 // `storage_balance_bounds.min` on v1.social08.testnet is 0.02 NEAR; 0.05 leaves headroom.
 const SOCIALDB_STORAGE_DEPOSIT = "50000000000000000000000";
 
-function transactionHash(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  if ("transaction" in value) {
-    const transaction = value.transaction;
-    if (transaction && typeof transaction === "object" && "hash" in transaction && typeof transaction.hash === "string") {
-      return transaction.hash;
-    }
-  }
-  if ("transaction_outcome" in value) {
-    const outcome = value.transaction_outcome;
-    if (outcome && typeof outcome === "object" && "id" in outcome && typeof outcome.id === "string") {
-      return outcome.id;
-    }
-  }
-  return null;
-}
+
 
 function toWriteError(value: unknown): Error {
   if (value instanceof Error) return value;
@@ -59,7 +45,7 @@ function toWriteError(value: unknown): Error {
  * Sends one `set` call to the SocialDB contract on behalf of the connected wallet.
  * `data` is the account's own subtree; this function nests it under the signer exactly once.
  */
-export async function testnetSet(data: Record<string, unknown>, wallet: WalletConnection): Promise<string> {
+async function testnetSet(data: Record<string, unknown>, wallet: WalletConnection): Promise<string> {
   if (!wallet.accountId) throw new Error("connect a wallet before writing");
 
   const settled = await wallet
@@ -79,20 +65,20 @@ export async function testnetSet(data: Record<string, unknown>, wallet: WalletCo
     })
     .catch((error: unknown) => error);
 
-  const hash = transactionHash(settled);
+  const hash = extractTxHash(settled);
   if (hash) return hash;
   throw toWriteError(settled);
 }
 
 /** SocialDB stores the latest main post as a JSON string plus its index entry. */
-export function socialDbPostData(text: string): Record<string, unknown> {
+function socialDbPostData(text: string): Record<string, unknown> {
   return {
     post: { main: JSON.stringify({ text, type: "md" }) },
     index: { post: JSON.stringify({ key: "main", value: { type: "md" } }) },
   };
 }
 
-export function socialDbFollowData(target: string, on: boolean): Record<string, unknown> {
+function socialDbFollowData(target: string, on: boolean): Record<string, unknown> {
   return {
     graph: { follow: { [target]: on ? "" : null } },
     index: {
@@ -101,7 +87,7 @@ export function socialDbFollowData(target: string, on: boolean): Record<string, 
   };
 }
 
-export function socialDbProfileData(name: string, about: string, avatar: string | null): Record<string, unknown> {
+function socialDbProfileData(name: string, about: string, avatar: string | null): Record<string, unknown> {
   const profile: Record<string, unknown> = { name, description: about };
   if (avatar) profile.image = { url: avatar };
   return { profile };

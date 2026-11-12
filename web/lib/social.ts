@@ -1,6 +1,7 @@
 import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
 import type { SignAndSendTransactionParams } from "./near-provider";
+import { extractTxHash } from "./tx";
 import {
   createPost as createTestnetPost,
   follow as testnetFollow,
@@ -11,6 +12,8 @@ import {
   testnetFollowers,
   testnetFollowing,
 } from "./social-testnet";
+
+export { extractTxHash } from "./tx";
 
 /** Minimal wallet surface the social and tipping helpers need. */
 export type WalletConnection = {
@@ -135,6 +138,7 @@ type ApiAccountCard = {
  */
 export const QUOTAS = {
   postsPerDay: 300,
+  maxPostChars: 25_000,
   likesPerDay: 1_000,
   repostsPerDay: 300,
   followsPerDay: 5_000,
@@ -151,7 +155,7 @@ export function isValidAccountId(accountId: string): boolean {
   return accountId.length >= 2 && accountId.length <= 64 && ACCOUNT_ID_PATTERN.test(accountId);
 }
 
-export function isImplicitAccountId(accountId: string): boolean {
+function isImplicitAccountId(accountId: string): boolean {
   return /^[0-9a-f]{64}$/.test(accountId);
 }
 
@@ -173,33 +177,7 @@ export function reputationFor(followers: number): { label: string; minimumFollow
   return REPUTATION_TIERS.find(tier => followers >= tier.minimumFollowers) ?? null;
 }
 
-export function extractTxHash(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  if ("transaction" in value) {
-    const transaction = value.transaction;
-    if (transaction && typeof transaction === "object" && "hash" in transaction && typeof transaction.hash === "string") {
-      return transaction.hash;
-    }
-  }
-  if ("transaction_outcome" in value) {
-    const outcome = value.transaction_outcome;
-    if (outcome && typeof outcome === "object" && "id" in outcome && typeof outcome.id === "string") {
-      return outcome.id;
-    }
-  }
-  if ("context" in value) {
-    const context = value.context;
-    if (
-      context &&
-      typeof context === "object" &&
-      "transactionHash" in context &&
-      typeof context.transactionHash === "string"
-    ) {
-      return context.transactionHash;
-    }
-  }
-  return null;
-}
+
 
 function toError(value: unknown): Error {
   if (value instanceof Error) return value;
@@ -399,19 +377,7 @@ export function fetchGlobalFeed(cursor?: string, limit?: number, viewer?: string
   return fetchJson<FeedPage<FeedItem>>("/v1/feed/global", { limit: clampLimit(limit), cursor, viewer });
 }
 
-export function fetchFollowingFeed(
-  accountId: string,
-  cursor?: string,
-  limit?: number,
-  viewer?: string,
-): Promise<FeedPage<FeedItem>> {
-  if (nearConfig.network === "testnet") return testnetAccountFeed(accountId, clampLimit(limit));
-  return fetchJson<FeedPage<FeedItem>>(`/v1/feed/following/${encodeURIComponent(accountId)}`, {
-    limit: clampLimit(limit),
-    cursor,
-    viewer,
-  });
-}
+
 
 export async function fetchAccount(accountId: string, viewer?: string | null): Promise<AccountProfile> {
   if (!isValidAccountId(accountId)) throw new Error(`"${accountId}" is not a valid account id`);
@@ -555,7 +521,7 @@ export function getIndexerStatus(): Promise<IndexerStatus> {
 let lastPostId = 0;
 
 /** Monotonic per-session post id so two posts in the same millisecond never collide. */
-export function nextPostId(now: number = Date.now()): string {
+function nextPostId(now: number = Date.now()): string {
   const id = Math.max(now, lastPostId + 1);
   lastPostId = id;
   return String(id);

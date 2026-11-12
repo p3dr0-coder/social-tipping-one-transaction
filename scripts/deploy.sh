@@ -30,6 +30,8 @@ INIT_ARGS="$(printf '{"default_tip":"0.1","ft_account_id":"%s","decimals":%s,"ow
 
 (
   cd "$CONTRACT_DIR"
+  # `cargo near build` is lockfile-driven; create one on a fresh clone before building.
+  cargo generate-lockfile
   cargo near build non-reproducible-wasm
 )
 

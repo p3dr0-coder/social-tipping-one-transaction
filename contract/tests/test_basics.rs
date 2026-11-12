@@ -1,15 +1,23 @@
 //! Sandbox integration test for the `philia-tips` contract.
 //!
 //! The test starts a local NEAR node, builds the contract wasm with `cargo near build`,
-//! deploys it with its init call, and walks the storage-accounting paths:
+//! deploys it with its init call, and walks the storage-accounting paths with balance evidence
+//! read back from the RPC account view:
 //!
 //! 1. growing storage without a deposit is rejected and changes nothing;
 //! 2. the same insert succeeds once the caller funds the bytes, and the excess deposit is
 //!    refunded;
-//! 3. an equal-length update needs no deposit;
-//! 4. a shorter value frees bytes and is accepted with no deposit;
-//! 5. removal returns the preference to the default and refunds the stored bytes;
+//! 3. an equal-length update needs no deposit and costs gas only;
+//! 4. a longer value grows storage (funded); overwriting it with a shorter one frees bytes, so
+//!    the zero-deposit write is accepted and costs less than the equal-length update by about
+//!    the freed bytes' value (a shrink cannot gain NEAR net, because the call burns more gas
+//!    than the freed bytes are worth);
+//! 5. removal returns the preference to the default and refunds the whole freed record, which
+//!    is worth more than the call's gas, so the balance grows;
 //! 6. `set_default_tip` is owner-only.
+//!
+//! Nothing in this contract reads the clock or a block height, so no case here is
+//! time-dependent and `sandbox.fast_forward` is intentionally not used (row S13-05 is N/A).
 //!
 //! Sandbox execution is supported on Linux and macOS only.
 
@@ -26,6 +34,14 @@ use serde_json::{json, Value};
 const FT_ACCOUNT: &str = "wrap.testnet";
 const DECIMALS: u8 = 24;
 const DEFAULT_TIP: &str = "0.1";
+/// The longest amount `parse_units` accepts for this deployment: 12 integer digits, the dot and
+/// all 24 fractional digits. Writing it and then overwriting it with `SHRUNK_TIP` frees the
+/// most bytes a single write can free here.
+const LONG_TIP: &str = "123456789012.000000000000000000000001";
+/// The value that overwrites `LONG_TIP` in the shrink case.
+const SHRUNK_TIP: &str = "0.2";
+/// Storage price: 1e19 yoctoNEAR per byte (100 kB per NEAR).
+const STORAGE_BYTE_COST: u128 = 10_000_000_000_000_000_000;
 
 async fn view_string(network: &NetworkConfig, contract_id: &AccountId, method: &str, args: Value) -> Result<String> {
     let data: Data<String> = Contract(contract_id.clone())
@@ -45,6 +61,15 @@ async fn tip_preference(network: &NetworkConfig, contract_id: &AccountId, accoun
         json!({ "account_id": account_id.to_string() }),
     )
     .await
+}
+
+async fn balance_of(network: &NetworkConfig, account_id: &AccountId) -> Result<NearToken> {
+    Ok(Tokens::account(account_id.clone())
+        .near_balance()
+        .fetch_from(network)
+        .await
+        .with_context(|| format!("read the NEAR balance of {account_id}"))?
+        .total)
 }
 
 async fn call(
@@ -105,7 +130,8 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
             .context("parse the sandbox genesis key")?,
     )?;
 
-    let wasm_path = cargo_near_build::build_with_cli(Default::default()).context("build philia-tips wasm")?;
+    let wasm_path = cargo_near_build::build_with_cli(Default::default())
+        .map_err(|error| anyhow::anyhow!("build philia-tips wasm: {error}"))?;
     let wasm = std::fs::read(wasm_path).context("read the built philia-tips wasm")?;
 
     Contract::deploy(owner_id.clone())
@@ -176,12 +202,7 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
 
     // 2. The insert succeeds when the caller funds the grown bytes, and the excess deposit
     //    comes back in the same transaction (only gas is spent).
-    let before = Tokens::account(alice_id.clone())
-        .near_balance()
-        .fetch_from(&network)
-        .await
-        .context("read alice's balance before the funded write")?
-        .total;
+    let before = balance_of(&network, &alice_id).await?;
     set_preference(
         &network,
         &owner_id,
@@ -191,20 +212,22 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         NearToken::from_millinear(10),
     )
     .await?;
-    assert_eq!(tip_preference(&network, &owner_id, &alice_id).await?, "0.2");
-    let after = Tokens::account(alice_id.clone())
-        .near_balance()
-        .fetch_from(&network)
-        .await
-        .context("read alice's balance after the funded write")?
-        .total;
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        "0.2",
+        "the funded write stores the new value"
+    );
+    let after = balance_of(&network, &alice_id).await?;
     let spent = before.as_yoctonear().saturating_sub(after.as_yoctonear());
     assert!(
         spent < NearToken::from_millinear(5).as_yoctonear(),
         "the deposit beyond the grown bytes must be refunded; {spent} yocto were spent"
     );
 
-    // 3. An equal-length update needs no deposit at all.
+    // 3. An equal-length update needs no deposit and buys no storage either: the balance pays
+    //    gas only, so it strictly decreases with no refund to offset it. That delta is the
+    //    gas-only baseline the shrink case in step 4 is measured against.
+    let equal_before = balance_of(&network, &alice_id).await?;
     set_preference(
         &network,
         &owner_id,
@@ -214,31 +237,82 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         NearToken::from_yoctonear(0),
     )
     .await?;
-    assert_eq!(tip_preference(&network, &owner_id, &alice_id).await?, "0.3");
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        "0.3",
+        "the equal-length update stores the new value"
+    );
+    let equal_after = balance_of(&network, &alice_id).await?;
+    let gas_only = equal_before.as_yoctonear().saturating_sub(equal_after.as_yoctonear());
+    assert!(
+        equal_after.as_yoctonear() < equal_before.as_yoctonear(),
+        "an equal-length update must not refund anything; the balance only pays gas"
+    );
+    assert!(
+        gas_only < NearToken::from_millinear(5).as_yoctonear(),
+        "an equal-length update must not charge storage; {gas_only} yocto were spent"
+    );
 
-    // 4. A longer value grows storage (funded), then a shorter value shrinks it and is
-    //    accepted with no deposit: the freed bytes are refunded, not charged.
+    // 4. A much longer value grows storage (funded), then a shorter value shrinks it and is
+    //    accepted with no deposit. The shrink refunds the freed bytes, but it cannot leave the
+    //    caller with a higher balance than it started with: the sandbox genesis gas price is
+    //    nearcore's `MIN_GAS_PRICE` of 1e8 yocto per gas, a function call burns the
+    //    `function_call` fee on send *and* on execution (2.32 Tgas each, plus receipt fees),
+    //    so a call costs about 0.0005 NEAR, while the freed bytes here are worth 0.00034 NEAR.
+    //    The refund is therefore measured against the gas-only baseline of step 3: the shrink
+    //    must undercut it by about the freed bytes' value, whereas without the refund both
+    //    calls would cost the same gas.
+    let grown_before = balance_of(&network, &alice_id).await?;
     set_preference(
         &network,
         &owner_id,
         &alice_id,
         &alice_signer,
-        "0.25",
+        LONG_TIP,
         NearToken::from_millinear(10),
     )
     .await?;
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        LONG_TIP,
+        "the funded write stores the long value"
+    );
+    let grown_after = balance_of(&network, &alice_id).await?;
+    let grown_spent = grown_before.as_yoctonear().saturating_sub(grown_after.as_yoctonear());
+    assert!(
+        grown_spent < NearToken::from_millinear(5).as_yoctonear(),
+        "the deposit beyond the grown bytes must be refunded; {grown_spent} yocto were spent"
+    );
+
+    let shrink_before = balance_of(&network, &alice_id).await?;
     set_preference(
         &network,
         &owner_id,
         &alice_id,
         &alice_signer,
-        "0.2",
+        SHRUNK_TIP,
         NearToken::from_yoctonear(0),
     )
     .await?;
-    assert_eq!(tip_preference(&network, &owner_id, &alice_id).await?, "0.2");
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        SHRUNK_TIP,
+        "the shrink is accepted without a deposit"
+    );
+    let shrink_after = balance_of(&network, &alice_id).await?;
+    let shrink_spent = shrink_before.as_yoctonear().saturating_sub(shrink_after.as_yoctonear());
+    let freed_bytes = (LONG_TIP.len() - SHRUNK_TIP.len()) as u128;
+    let refunded = gas_only.saturating_sub(shrink_spent);
+    assert!(
+        refunded > freed_bytes * STORAGE_BYTE_COST / 2,
+        "the freed bytes must be refunded, not charged: the shrink spent {shrink_spent} yocto \
+         against {gas_only} for the equal-length update, {refunded} yocto less than gas alone"
+    );
 
-    // 5. Removal refunds the stored bytes and restores the default fallback.
+    // 5. Removal refunds the whole freed record — the 33-byte hashed key, the 7-byte value and
+    //    the 40 bytes the protocol charges per record, about 0.0008 NEAR — which is more than
+    //    the roughly 0.0005 NEAR the call burns in gas, so the caller's balance grows.
+    let removal_before = balance_of(&network, &alice_id).await?;
     call(
         &network,
         &owner_id,
@@ -249,7 +323,18 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         NearToken::from_yoctonear(0),
     )
     .await?;
-    assert_eq!(tip_preference(&network, &owner_id, &alice_id).await?, DEFAULT_TIP);
+    assert_eq!(
+        tip_preference(&network, &owner_id, &alice_id).await?,
+        DEFAULT_TIP,
+        "a removed preference falls back to the default"
+    );
+    let removal_after = balance_of(&network, &alice_id).await?;
+    assert!(
+        removal_after.as_yoctonear() > removal_before.as_yoctonear(),
+        "removal must refund the freed record: the balance went from {} to {} yocto",
+        removal_before.as_yoctonear(),
+        removal_after.as_yoctonear()
+    );
 
     // 6. Only the owner can reprice the default.
     let _denied = Contract(owner_id.clone())

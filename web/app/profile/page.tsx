@@ -246,6 +246,16 @@ export default function ProfilePage() {
                           disabled={uploading}
                         />
                       </label>
+                      {avatar && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm rounded-full"
+                          onClick={() => setAvatar(null)}
+                          disabled={uploading}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                     <p className="text-[10px] opacity-30 px-2 leading-relaxed italic">
                       Encoded to WebP and uploaded to FastFS. Maximum 1 MiB per upload.

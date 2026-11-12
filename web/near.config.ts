@@ -29,6 +29,9 @@ export const nearConfig = {
   socialDbContractId:
     process.env.NEXT_PUBLIC_PHILIA_SOCIALDB_CONTRACT_ID ?? (isMainnet ? "social.near" : "v1.social08.testnet"),
   tipFt: process.env.NEXT_PUBLIC_PHILIA_TIP_FT ?? (isMainnet ? MAINNET_USDC_ACCOUNT : TESTNET_USDC_ACCOUNT),
+  // Optional NEP-516 `evm-on-near` manifest URL. When set, the connector registers it so
+  // MetaMask-controlled `0x…` NEAR accounts can sign in next to native wallets.
+  evmManifest: process.env.NEXT_PUBLIC_PHILIA_EVM_MANIFEST,
   socialApiBase: "https://api2.near.social",
   fastfsGateway: "https://main.fastfs.io",
   oneClickQuoteUrl: "https://1click.chaindefuser.com/v0/quote",

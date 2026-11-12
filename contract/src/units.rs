@@ -134,4 +134,52 @@ mod tests {
     fn integral_amount_scales_to_base_units() {
         assert_eq!(parse_units("12", 24), 12 * 10u128.pow(24));
     }
+
+    #[test]
+    #[should_panic(expected = "amount must have an integer part")]
+    fn empty_amount_panics() {
+        parse_units("", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount must have an integer part")]
+    fn lone_dot_panics() {
+        parse_units(".", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount must have an integer part")]
+    fn missing_integer_part_panics() {
+        parse_units(".5", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "integer part must be ASCII digits")]
+    fn negative_amount_panics() {
+        parse_units("-1", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "fraction must be ASCII digits")]
+    fn second_dot_panics() {
+        parse_units("1..2", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "integer part must be ASCII digits")]
+    fn non_digit_character_panics() {
+        parse_units("1a", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "greater than zero")]
+    fn zero_integer_and_zero_fraction_panics() {
+        parse_units("0.0", 6);
+    }
+
+    #[test]
+    #[should_panic(expected = "decimals are too large for u128")]
+    fn decimals_beyond_u128_pow10_overflow_panics() {
+        parse_units("1", 39);
+    }
 }

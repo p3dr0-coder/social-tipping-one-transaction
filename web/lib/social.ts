@@ -2,15 +2,14 @@ import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
 import type { SignAndSendTransactionParams } from "./near-provider";
 import {
-  socialDbFollowData,
-  socialDbPostData,
-  socialDbProfileData,
+  createPost as createTestnetPost,
+  follow as testnetFollow,
+  setProfile as testnetSetProfile,
   testnetAccountFeed,
   testnetAccountProfile,
   testnetActivityFeed,
   testnetFollowers,
   testnetFollowing,
-  testnetSet,
 } from "./social-testnet";
 
 /** Minimal wallet surface the social and tipping helpers need. */
@@ -85,6 +84,17 @@ export type StreamBlock = {
   tx_hashes: string[];
   posts: string[];
   accounts: string[];
+};
+
+export type NotificationKind = "like" | "repost" | "reply" | "quote" | "mention" | "follow";
+
+export type NotificationItem = {
+  kind: NotificationKind;
+  actors: AccountSummary[];
+  actor_count: number;
+  post: Post | null;
+  created_at: number;
+  cursor?: string | null;
 };
 
 type IndexerKeyStatus = { key?: string; status?: string; reason?: string };
@@ -272,14 +282,22 @@ function isStreamBlock(value: unknown): value is StreamBlock {
   );
 }
 
+export type ConfirmTxOptions = {
+  timeoutMs?: number;
+  intervalMs?: number;
+  fallback?: () => Promise<boolean>;
+};
+
 /**
  * Polls the indexer until a transaction is indexed and every action and key reports `ok`.
  * Failure statuses are surfaced with the key and status that produced them.
+ *
+ * `/v1/tx` keeps roughly 200k transactions, so a slow poll can miss a real write. When
+ * `fallback` is provided and the hash never appears (timeout, including a 404 past
+ * retention), the read-side check runs: `true` returns a synthetic indexed result and
+ * `false` throws. The write itself is never retried.
  */
-export async function confirmTx(
-  hash: string,
-  options: { timeoutMs?: number; intervalMs?: number } = {},
-): Promise<IndexerTx> {
+export async function confirmTx(hash: string, options: ConfirmTxOptions = {}): Promise<IndexerTx> {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const intervalMs = options.intervalMs ?? 1_500;
   const startedAt = Date.now();
@@ -313,7 +331,24 @@ export async function confirmTx(
     }
 
     if (Date.now() - startedAt > timeoutMs) {
-      throw new Error(`social write ${hash} was not indexed within ${Math.round(timeoutMs / 1_000)} s`);
+      const timeoutError = new Error(
+        `social write ${hash} was not indexed within ${Math.round(timeoutMs / 1_000)} s`,
+      );
+      if (options.fallback) {
+        let observed: boolean;
+        try {
+          observed = await options.fallback();
+        } catch (cause) {
+          throw new Error(`${timeoutError.message}, and the read-side check failed: ${toError(cause).message}`);
+        }
+        if (observed) {
+          // The indexer never reported the hash, but the written state is readable, so the
+          // write did land (usually an aged-out `/v1/tx` entry). Never resend the write.
+          return { tx_hash: hash, indexed: true, actions: [] };
+        }
+        throw new Error(`${timeoutError.message}, and the write is not visible on the read side`);
+      }
+      throw timeoutError;
     }
     await delay(intervalMs);
   }
@@ -433,6 +468,23 @@ export function fetchFollowing(accountId: string, cursor?: string, limit?: numbe
   });
 }
 
+export async function fetchNotifications(
+  accountId: string,
+  cursor?: string,
+  limit?: number,
+): Promise<FeedPage<NotificationItem>> {
+  if (!isValidAccountId(accountId)) throw new Error(`"${accountId}" is not a valid account id`);
+  if (nearConfig.network === "testnet") {
+    // api2 indexes mainnet `social` only, and SocialDB has no derived notifications,
+    // so an empty page is the honest testnet answer.
+    return { items: [], next_cursor: null };
+  }
+  return fetchJson<FeedPage<NotificationItem>>(`/v1/notifications/${encodeURIComponent(accountId)}`, {
+    limit: clampLimit(limit),
+    cursor,
+  });
+}
+
 export async function isFollowing(target: string, viewer: string): Promise<boolean> {
   if (viewer === target) return false;
   const profile = await fetchAccount(target, viewer);
@@ -482,29 +534,38 @@ export function nextPostId(now: number = Date.now()): string {
 export async function createPost(text: string, wallet: WalletConnection): Promise<string> {
   const body = text.trim();
   if (body.length === 0) throw new Error("write something before posting");
-  if (!wallet.accountId) throw new Error("connect a wallet before posting");
+  const accountId = wallet.accountId;
+  if (!accountId) throw new Error("connect a wallet before posting");
 
   const id = nextPostId();
   if (nearConfig.network === "testnet") {
-    return testnetSet({ [wallet.accountId]: socialDbPostData(body) }, wallet);
+    return createTestnetPost(wallet, body);
   }
   const hash = await kvWrite({ [`post/${id}`]: { text: body } }, wallet);
-  await confirmTx(hash);
+  await confirmTx(hash, {
+    fallback: async () => {
+      const page = await fetchAccountPosts(accountId, undefined, 100);
+      return page.items.some(item => item.post.id === id);
+    },
+  });
   return hash;
 }
 
 /** Follows or unfollows `target` by writing the edge as `{}` or `null`. */
 export async function setFollow(target: string, on: boolean, wallet: WalletConnection): Promise<string> {
-  if (!wallet.accountId) throw new Error("connect a wallet before following");
-  const accountId = target.trim().toLowerCase();
-  if (!isValidAccountId(accountId)) throw new Error(`"${target}" is not a valid account id`);
-  if (accountId === wallet.accountId) throw new Error("you cannot follow yourself");
+  const accountId = wallet.accountId;
+  if (!accountId) throw new Error("connect a wallet before following");
+  const targetId = target.trim().toLowerCase();
+  if (!isValidAccountId(targetId)) throw new Error(`"${target}" is not a valid account id`);
+  if (targetId === accountId) throw new Error("you cannot follow yourself");
 
   if (nearConfig.network === "testnet") {
-    return testnetSet({ [wallet.accountId]: socialDbFollowData(accountId, on) }, wallet);
+    return testnetFollow(wallet, targetId, on);
   }
-  const hash = await kvWrite({ [`graph/follow/${accountId}`]: on ? {} : null }, wallet);
-  await confirmTx(hash);
+  const hash = await kvWrite({ [`graph/follow/${targetId}`]: on ? {} : null }, wallet);
+  await confirmTx(hash, {
+    fallback: async () => (await isFollowing(targetId, accountId)) === on,
+  });
   return hash;
 }
 
@@ -516,23 +577,31 @@ export type ProfileUpdate = {
 
 /** Writes the profile fields as one batch (three keys, well below the 256-key limit). */
 export async function saveProfile(update: ProfileUpdate, wallet: WalletConnection): Promise<string> {
-  if (!wallet.accountId) throw new Error("connect a wallet before saving a profile");
+  const accountId = wallet.accountId;
+  if (!accountId) throw new Error("connect a wallet before saving a profile");
   const about = update.about.trim();
   const name = update.name.trim();
   if (about.length > 10_000) throw new Error("the bio must be at most 10,000 characters");
   if (name.length > 64) throw new Error("the display name must be at most 64 characters");
 
   if (nearConfig.network === "testnet") {
-    return testnetSet({ [wallet.accountId]: socialDbProfileData(name, about, update.avatar ?? null) }, wallet);
+    return testnetSetProfile(wallet, { name, about, avatar: update.avatar ?? null });
   }
 
   const data: Record<string, unknown> = {
     "profile/about": about,
     "profile/name": name,
   };
-  if (update.avatar) data["profile/avatar"] = update.avatar;
+  if (update.avatar !== undefined) data["profile/avatar"] = update.avatar;
 
   const hash = await kvWrite(data, wallet);
-  await confirmTx(hash);
+  await confirmTx(hash, {
+    fallback: async () => {
+      const profile = await fetchAccount(accountId);
+      if (profile.about !== about || (profile.name ?? "") !== name) return false;
+      if (update.avatar !== undefined && profile.avatar !== update.avatar) return false;
+      return true;
+    },
+  });
   return hash;
 }

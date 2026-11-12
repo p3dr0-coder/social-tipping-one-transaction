@@ -138,3 +138,131 @@ impl TipPreferences {
         TipEvent::DefaultTipSet { amount }.emit();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use near_sdk::serde_json::Value;
+    use near_sdk::test_utils::{get_logs, VMContextBuilder};
+    use near_sdk::testing_env;
+
+    fn account(id: &str) -> AccountId {
+        id.parse().expect("valid account id")
+    }
+
+    /// The token bound to every test deployment: 6 decimals, like USDC.
+    fn deployed(default_tip: &str, decimals: u8) -> TipPreferences {
+        TipPreferences::new(
+            default_tip.to_string(),
+            account("usdc.testnet"),
+            decimals,
+            account("owner.testnet"),
+        )
+    }
+
+    /// Reads the single log emitted by a test and returns the parsed NEP-297 payload.
+    fn single_emitted_event() -> Value {
+        let logs = get_logs();
+        assert_eq!(logs.len(), 1, "the event is the only log");
+        let json = logs[0]
+            .strip_prefix("EVENT_JSON:")
+            .expect("NEP-297 events are logged with the EVENT_JSON: prefix");
+        near_sdk::serde_json::from_str(json).expect("event log holds valid JSON")
+    }
+
+    fn assert_nep297_envelope(event: &Value, name: &str) {
+        let object = event.as_object().expect("event is a JSON object");
+        assert_eq!(object.len(), 4, "standard, version, event, data");
+        assert_eq!(event["standard"], "philia-tips");
+        assert_eq!(event["version"], "1.0.0");
+        assert_eq!(event["event"], name);
+    }
+
+    #[test]
+    #[should_panic(expected = "fraction has more digits")]
+    fn new_rejects_a_default_the_token_cannot_represent() {
+        testing_env!(VMContextBuilder::new().build());
+        // A 6-decimal token cannot store 0.0000001; `new` must reject it instead of
+        // failing the first tip.
+        deployed("0.0000001", 6);
+    }
+
+    #[test]
+    fn unknown_account_falls_back_to_the_default_tip() {
+        testing_env!(VMContextBuilder::new()
+            .current_account_id(account("philia.testnet"))
+            .build());
+        let contract = deployed("0.1", 6);
+
+        // Nothing was inserted into the LookupMap, so the read misses and falls back.
+        assert_eq!(contract.get_tip_preference(account("alice.testnet")), "0.1");
+    }
+
+    #[test]
+    fn views_return_the_initialized_values() {
+        testing_env!(VMContextBuilder::new().build());
+        let contract = deployed("0.1", 6);
+
+        assert_eq!(contract.get_default_tip(), "0.1");
+        assert_eq!(contract.get_tip_token(), (account("usdc.testnet"), 6));
+    }
+
+    #[test]
+    fn preference_set_event_has_the_nep297_shape() {
+        testing_env!(VMContextBuilder::new()
+            .current_account_id(account("philia.testnet"))
+            .predecessor_account_id(account("alice.testnet"))
+            .build());
+
+        TipEvent::PreferenceSet {
+            account_id: account("alice.testnet"),
+            amount: "0.1".to_string(),
+        }
+        .emit();
+
+        let event = single_emitted_event();
+        assert_nep297_envelope(&event, "preference_set");
+        let data = event["data"].as_object().expect("data is a JSON object");
+        assert_eq!(data.len(), 2);
+        assert_eq!(event["data"]["account_id"], "alice.testnet");
+        assert_eq!(event["data"]["amount"], "0.1");
+    }
+
+    #[test]
+    fn preference_removed_event_has_the_nep297_shape() {
+        testing_env!(VMContextBuilder::new()
+            .current_account_id(account("philia.testnet"))
+            .predecessor_account_id(account("alice.testnet"))
+            .build());
+
+        TipEvent::PreferenceRemoved {
+            account_id: account("alice.testnet"),
+        }
+        .emit();
+
+        let event = single_emitted_event();
+        assert_nep297_envelope(&event, "preference_removed");
+        let data = event["data"].as_object().expect("data is a JSON object");
+        assert_eq!(data.len(), 1);
+        assert_eq!(event["data"]["account_id"], "alice.testnet");
+    }
+
+    #[test]
+    fn default_tip_set_event_has_the_nep297_shape() {
+        testing_env!(VMContextBuilder::new()
+            .current_account_id(account("philia.testnet"))
+            .predecessor_account_id(account("owner.testnet"))
+            .build());
+
+        TipEvent::DefaultTipSet {
+            amount: "0.25".to_string(),
+        }
+        .emit();
+
+        let event = single_emitted_event();
+        assert_nep297_envelope(&event, "default_tip_set");
+        let data = event["data"].as_object().expect("data is a JSON object");
+        assert_eq!(data.len(), 1);
+        assert_eq!(event["data"]["amount"], "0.25");
+    }
+}

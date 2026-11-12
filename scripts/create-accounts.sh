@@ -29,7 +29,8 @@ create_parent() {
     echo "create-accounts: $PARENT already exists"
     return
   fi
-  near create-account "$PARENT" --useFaucet --networkId "$NETWORK"
+  # near-cli-rs v0.31.1 grammar: the faucet can only sponsor top-level .testnet names.
+  near create-account "$PARENT" sponsor-by-faucet-service network-config "$NETWORK" send
 }
 
 create_child() {
@@ -38,7 +39,9 @@ create_child() {
     echo "create-accounts: $account already exists"
     return
   fi
-  near create-account "$account" --useAccount "$PARENT" --networkId "$NETWORK" --initialBalance 0.1
+  # Sub-accounts are funded by their parent: `fund-myself <balance> <signer>`.
+  near create-account "$account" fund-myself 0.1NEAR use-account "$PARENT" \
+    network-config "$NETWORK" send
 }
 
 create_parent

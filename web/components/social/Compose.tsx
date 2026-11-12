@@ -40,6 +40,11 @@ export const Compose = () => {
         maxLength={280}
       />
 
+      <p role="note" className="px-2 pb-3 text-xs leading-relaxed opacity-50">
+        FastData allows 300 posts/day and up to 25,000 characters per post; this composer keeps the 280-character
+        limit. Edits and deletes stay in the public transaction history.
+      </p>
+
       <div className="flex justify-between items-center pt-4 border-t border-white/5">
         <div className="flex items-center gap-3">
           {accountId && (

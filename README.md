@@ -146,8 +146,8 @@ generated from the Scaffold-ETH 2 baseline; that disclosure is in [`NOTICE`](./N
   zero-deposit calls to `__fastdata_kv` and `__fastdata_fastfs` on `social`. Tipping (1 yocto
   on `ft_transfer`), storage registration, and any payable contract call fall back to normal
   wallet signing. This is expected behavior, not a failure.
-- **Avatars are capped at 1 MiB.** A larger image is rejected before upload. FastFS `Simple`
-  payloads are single-transaction writes; multi-part `Partial` uploads are not implemented.
+- **Avatars are capped at 1 MiB.** Larger media is uploaded as 1 MiB `Partial` chunks
+  (reassembled up to 32 MiB); avatars stay on the single-transaction `Simple` path.
 
 ## Development commands
 

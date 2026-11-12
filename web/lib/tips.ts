@@ -148,7 +148,15 @@ export type TipQuote = {
  * Optional cross-chain tip: a dry 1Click quote that settles into native USDC on NEAR.
  * `dry: true` returns a quote and a deposit address without moving funds.
  */
-export async function quoteTip(params: { originAsset: string; recipient: string; refundTo: string }): Promise<TipQuote> {
+export async function quoteTip(params: {
+  originAsset: string;
+  amount: string;
+  recipient: string;
+  refundTo: string;
+}): Promise<TipQuote> {
+  if (!/^\d+$/.test(params.amount) || params.amount === "0") {
+    throw new Error("the 1Click amount must be a positive integer string in origin base units");
+  }
   const response = await fetch(nearConfig.oneClickQuoteUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -156,9 +164,11 @@ export async function quoteTip(params: { originAsset: string; recipient: string;
       dry: true,
       originAsset: params.originAsset,
       destinationAsset: nearConfig.mainnetUsdcAssetId,
+      amount: params.amount,
       recipient: params.recipient,
       recipientType: "DESTINATION_CHAIN",
       refundTo: params.refundTo,
+      refundType: "ORIGIN_CHAIN",
       deadline: new Date(Date.now() + 10 * 60 * 1_000).toISOString(),
     }),
   });

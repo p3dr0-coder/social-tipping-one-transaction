@@ -54,7 +54,10 @@ function toWriteError(value: unknown): Error {
   }
 }
 
-/** Sends one `set` call to the SocialDB contract on behalf of the connected wallet. */
+/**
+ * Sends one `set` call to the SocialDB contract on behalf of the connected wallet.
+ * `data` is the account's own subtree; this function nests it under the signer exactly once.
+ */
 export async function testnetSet(data: Record<string, unknown>, wallet: WalletConnection): Promise<string> {
   if (!wallet.accountId) throw new Error("connect a wallet before writing");
 
@@ -101,6 +104,40 @@ export function socialDbProfileData(name: string, about: string, avatar: string 
   const profile: Record<string, unknown> = { name, description: about };
   if (avatar) profile.image = { url: avatar };
   return { profile };
+}
+
+export type TestnetProfileUpdate = {
+  name: string;
+  about: string;
+  avatar?: string | null;
+};
+
+/**
+ * Wallet-signed testnet writes. Each wrapper builds the SocialDB `set` payload and sends it
+ * through `testnetSet`, which nests the data under the connected account exactly once.
+ */
+export async function setProfile(wallet: WalletConnection, update: TestnetProfileUpdate): Promise<string> {
+  if (!wallet.accountId) throw new Error("connect a wallet before saving a profile");
+  const name = update.name.trim();
+  const about = update.about.trim();
+  if (about.length > 10_000) throw new Error("the bio must be at most 10,000 characters");
+  if (name.length > 64) throw new Error("the display name must be at most 64 characters");
+  return testnetSet(socialDbProfileData(name, about, update.avatar ?? null), wallet);
+}
+
+export async function createPost(wallet: WalletConnection, text: string): Promise<string> {
+  const body = text.trim();
+  if (body.length === 0) throw new Error("write something before posting");
+  if (!wallet.accountId) throw new Error("connect a wallet before posting");
+  return testnetSet(socialDbPostData(body), wallet);
+}
+
+export async function follow(wallet: WalletConnection, target: string, on: boolean): Promise<string> {
+  if (!wallet.accountId) throw new Error("connect a wallet before following");
+  const accountId = target.trim().toLowerCase();
+  if (accountId.length === 0) throw new Error("a follow needs a target account id");
+  if (accountId === wallet.accountId) throw new Error("you cannot follow yourself");
+  return testnetSet(socialDbFollowData(accountId, on), wallet);
 }
 
 function parseMainPost(raw: unknown): { text: string } | null {

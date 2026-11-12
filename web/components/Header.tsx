@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon, ClipboardDocumentIcon, PowerIcon } from "@heroicons/react/24/outline";
 import { useNear } from "~~/lib/near-provider";
+import { isNamedAccountId } from "~~/lib/social";
 import { notification } from "~~/utils/notification";
 
 type HeaderMenuLink = {
@@ -28,8 +29,9 @@ export const HeaderMenuLinks = () => {
   const pathname = usePathname();
   const { accountId } = useNear();
 
-  // Menu links only exist once a named account is connected.
-  if (!accountId) return null;
+  // Menu links only exist for a connected named account; implicit 64-hex accounts get the
+  // landing page from AccountGuard, so the navigation must not appear for them either.
+  if (!accountId || !isNamedAccountId(accountId)) return null;
 
   return (
     <>

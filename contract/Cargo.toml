@@ -14,6 +14,8 @@ crate-type = ["cdylib", "rlib"]
 near-sdk = "=5.30.1"
 
 [dev-dependencies]
+# `testing_env!` and `test_utils` live behind this feature; dev-only, so wasm builds stay lean.
+near-sdk = { version = "=5.30.1", features = ["unit-testing"] }
 near-sandbox = "0.4.0"
 near-api = "0.8.7"
 cargo-near-build = "0.11.5"

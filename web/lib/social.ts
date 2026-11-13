@@ -412,11 +412,12 @@ export function fetchAccountPosts(
 
 async function testnetAccountsFromActivity(excluded: string[]): Promise<AccountCard[]> {
   const page = await testnetActivityFeed(100);
+  const excludedSet = new Set(excluded);
   const seen = new Map<string, AccountCard>();
   for (const item of page.items) {
     const accountId = item.post.author.account_id;
-    if (excluded.includes(accountId) || seen.has(accountId)) continue;
-    seen.set(accountId, { account_id: accountId });
+    if (excludedSet.has(accountId)) continue;
+    seen.getOrInsert(accountId, { account_id: accountId });
   }
   return [...seen.values()];
 }

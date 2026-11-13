@@ -6,7 +6,8 @@
   "description": "Zero-funds testnet social loop and gas/latency measurement for philia.",
   "scripts": {
     "social-loop": "node social-loop.mjs",
-    "measure": "node measure.mjs"
+    "measure": "node measure.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "near-api-js": "7.5.3"

@@ -14,7 +14,7 @@
     "start": "pnpm --filter philia-web start",
     "lint": "pnpm --filter philia-web lint",
     "check-types": "pnpm --filter philia-web check-types",
-    "test": "pnpm --filter philia-web test",
+    "test": "pnpm --filter philia-web test && pnpm --filter philia-demo test",
     "format": "pnpm --filter philia-web format",
     "contract:build": "cd contract && cargo near build non-reproducible-wasm",
     "contract:test": "cd contract && cargo test",

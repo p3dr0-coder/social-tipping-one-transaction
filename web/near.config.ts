@@ -21,7 +21,9 @@ const isMainnet = network === "mainnet";
  */
 export const nearConfig = {
   network,
-  rpcUrl: process.env.NEXT_PUBLIC_NEAR_RPC_URL ?? (isMainnet ? "https://free.rpc.fastnear.com" : "https://rpc.testnet.near.org"),
+  rpcUrl:
+    process.env.NEXT_PUBLIC_NEAR_RPC_URL ??
+    (isMainnet ? "https://free.rpc.fastnear.com" : "https://rpc.testnet.fastnear.com"),
   philiaContract: process.env.NEXT_PUBLIC_PHILIA_CONTRACT ?? "philia.testnet",
   // FastData receiver: the same account id on both networks.
   socialReceiver: process.env.NEXT_PUBLIC_PHILIA_SOCIAL_RECEIVER ?? "social",
@@ -33,6 +35,9 @@ export const nearConfig = {
   // MetaMask-controlled `0x…` NEAR accounts can sign in next to native wallets.
   evmManifest: process.env.NEXT_PUBLIC_PHILIA_EVM_MANIFEST,
   socialApiBase: "https://api2.near.social",
+  fastDataApiUrl:
+    process.env.NEXT_PUBLIC_PHILIA_FASTDATA_API?.trim() ||
+    (isMainnet ? "https://kv.main.fastnear.com" : "https://kv.test.fastnear.com"),
   fastfsGateway: "https://main.fastfs.io",
   oneClickQuoteUrl: "https://1click.chaindefuser.com/v0/quote",
   oneClickTokensUrl: "https://1click.chaindefuser.com/v0/tokens",

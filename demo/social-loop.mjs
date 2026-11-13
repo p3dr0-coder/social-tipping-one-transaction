@@ -24,7 +24,7 @@ import {
 
 const NETWORK = (process.env.PHILIA_NETWORK ?? "testnet").trim().toLowerCase();
 const RPC_URL =
-  process.env.NEAR_RPC_URL ?? (NETWORK === "mainnet" ? "https://rpc.mainnet.near.org" : "https://rpc.testnet.near.org");
+  process.env.NEAR_RPC_URL ?? (NETWORK === "mainnet" ? "https://rpc.mainnet.near.org" : "https://rpc.testnet.fastnear.com");
 const SOCIAL_RECEIVER = "social";
 const SOCIAL_API = "https://api2.near.social";
 const CONFIRM_TIMEOUT_MS = 60_000;
@@ -91,7 +91,7 @@ function assertNetworkTarget() {
 
   if (/mainnet/i.test(RPC_URL)) {
     fail(
-      `NEAR_RPC_URL=${RPC_URL} looks like mainnet; set it to https://rpc.testnet.near.org or run with PHILIA_NETWORK=mainnet`,
+      `NEAR_RPC_URL=${RPC_URL} looks like mainnet; set it to https://rpc.testnet.fastnear.com or run with PHILIA_NETWORK=mainnet`,
     );
   }
   for (const [name, value] of ids) {

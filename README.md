@@ -29,7 +29,7 @@ follower list, and settle a tip.
 |---|---|
 | Social primitive | **near.social social DB (`social-kv/1` FastData KV + SocialDB)** |
 | Writes (mainnet path) | `social.__fastdata_kv` with a 1 Tgas function call and no attached deposit; one key per entity (`post/{id}`, `graph/follow/{account}`, `profile/*`) |
-| Reads (mainnet path) | `api2.near.social` feeds, profiles, search, suggestions, follower lists, and an SSE block stream |
+| Reads (mainnet path) | `api2.near.social` feeds, profiles, search, suggestions, follower lists, and an SSE block stream; FastData `/v0/latest` and `/v0/multi` verify exact keys and back the follow/post/profile fallbacks |
 | Writes/reads (testnet path) | SocialDB contract `v1.social08.testnet` through `near-social-js` for reads and a wallet-signed `set` call for writes |
 | Media | FastFS upload to `social.__fastdata_fastfs`, referenced as `fastfs://{account}/social/{path}` |
 | Tips | NEP-141 `ft_transfer` to the author, priced by the author's preference |
@@ -145,6 +145,19 @@ when `indexed` is `true` **and** every `actions[].keys[].status` is `ok`. A key 
 status that failed. The endpoint keeps roughly the last 200k transactions, so confirmation is
 prompt and a stale hash is reported as such instead of being retried.
 
+## NEP-413 authentication and replay
+
+`web/lib/auth.ts` verifies NEP-413 signatures with `near-api-js/nep413`
+`verifyMessage`. The library reads the signing key from the chain, requires
+`FullAccess`, and checks the message, recipient, nonce, and optional callback URL that the
+wallet signed.
+
+The verifier does not store nonces, and this repository has no backend authentication
+endpoint. A production backend MUST generate the 32-byte nonce for each session, bind it to
+that session, compare `recipient` with its own value, and accept each nonce once. Reject a
+replayed signature even when the signature is cryptographically valid. A signature is not a
+standalone bearer token.
+
 ## Limits and costs
 
 FastData enforces these per UTC day (over-quota writes return `rate_limited`):
@@ -188,6 +201,9 @@ indexed by api2; raw testnet FastData writes (`__fastdata_kv` to `social`) are i
 `kv.test.fastnear.com`. Mainnet writes go to `social` and are read through
 `api2.near.social`. The app selects the adapter from `NEXT_PUBLIC_NEAR_NETWORK`. The testnet
 demo spends only faucet-derived funds; the mainnet form of the same command spends real tokens.
+
+The browser and demo default to `https://rpc.testnet.fastnear.com` on testnet. Set
+`NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL` to override the endpoint.
 
 **No sybil claim.** NEAR accounts are not people. FastData quotas are per-account daily rate
 limits, not proof of uniqueness: one person can hold many accounts, and one account can be

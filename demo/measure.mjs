@@ -36,7 +36,7 @@ const KV_API_URL = (process.env.PHILIA_KV_API ?? "https://kv.test.fastnear.com")
 const KV_KEY_PREFIX = "post/";
 const INDEX_TIMEOUT_MS = 30_000;
 const INDEX_INTERVAL_MS = 1_000;
-const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org";
+const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.fastnear.com";
 
 function fail(message) {
   console.error(`measure: ${message}`);
@@ -138,7 +138,7 @@ const status = await rpc("status", []);
 const protocolVersion = status?.protocol_version;
 if (status?.chain_id !== "testnet") {
   fail(
-    `${RPC_URL} reports chain_id ${JSON.stringify(status?.chain_id)}; this measurement is testnet-only, so point NEAR_RPC_URL at https://rpc.testnet.near.org`,
+    `${RPC_URL} reports chain_id ${JSON.stringify(status?.chain_id)}; this measurement is testnet-only, so point NEAR_RPC_URL at https://rpc.testnet.fastnear.com`,
   );
 }
 console.error(`measure: ${RPC_URL} protocol ${protocolVersion}, ${alice}`);

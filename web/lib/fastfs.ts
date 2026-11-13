@@ -2,128 +2,18 @@ import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
 import { confirmTx, extractTxHash, type WalletConnection } from "./social";
 
-/** FastFS accepts a single-transaction `Simple` payload of at most 1 MiB. */
-const MAX_AVATAR_BYTES = 1024 * 1024;
-/** One `Partial` chunk, and the largest `Simple` payload, is 1 MiB. */
-const CHUNK_BYTES = 1024 * 1024;
-/** `Partial` uploads reassemble at most 32 MiB. */
-const MAX_MEDIA_BYTES = 32 * 1024 * 1024;
-const MAX_RELATIVE_PATH_BYTES = 1024;
-const MAX_MIME_BYTES = 256;
+import {
+  CHUNK_BYTES,
+  MAX_AVATAR_BYTES,
+  MAX_MEDIA_BYTES,
+  assertMimeType,
+  assertRelativePath,
+  encodePartialFastfsPayload as partialFastfsPayload,
+  encodeSimpleFastfsPayload as simpleFastfsPayload,
+} from "./fastfs-codec";
 
 const GATEWAY_POLL_INTERVAL_MS = 1_500;
 const GATEWAY_POLL_TIMEOUT_MS = 30_000;
-
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((length, part) => length + part.length, 0);
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-/** Borsh string: u32 little-endian byte length followed by the bytes. */
-function borshString(value: string | Uint8Array): Uint8Array {
-  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  const output = new Uint8Array(4 + bytes.length);
-  new DataView(output.buffer).setUint32(0, bytes.length, true);
-  output.set(bytes, 4);
-  return output;
-}
-
-/**
- * `FastfsData::Simple`: enum tag `0x00`, the relative path, then the `Some` content tag
- * `0x01` with the mime type and the file bytes.
- */
-function simpleFastfsPayload(relativePath: string, mimeType: string, content: Uint8Array): Uint8Array {
-  assertRelativePath(relativePath);
-  assertMimeType(mimeType);
-  return concatBytes([
-    new Uint8Array([0x00]),
-    borshString(relativePath),
-    new Uint8Array([0x01]),
-    borshString(mimeType),
-    borshString(content),
-  ]);
-}
-
-/** Borsh `u32`: four little-endian bytes. */
-function borshU32(value: number, field: string): Uint8Array {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new Error(`${field} must be an unsigned 32-bit integer, received ${String(value)}`);
-  }
-  const output = new Uint8Array(4);
-  new DataView(output.buffer).setUint32(0, value, true);
-  return output;
-}
-
-function assertRelativePath(relativePath: string): void {
-  const segments = relativePath.split("/");
-  const invalid =
-    relativePath.length === 0 ||
-    !/^[A-Za-z0-9._\-/]+$/.test(relativePath) ||
-    relativePath.startsWith("/") ||
-    relativePath.endsWith("/") ||
-    segments.some(segment => segment.length === 0 || segment === "." || segment === "..") ||
-    new TextEncoder().encode(relativePath).byteLength > MAX_RELATIVE_PATH_BYTES;
-  if (invalid) {
-    throw new Error(
-      `"${relativePath}" is not a valid FastFS relative path: ASCII segments separated by "/", no leading, ` +
-        `trailing or empty segments, no "." or "..", at most ${MAX_RELATIVE_PATH_BYTES} bytes`,
-    );
-  }
-}
-
-function assertMimeType(mimeType: string): void {
-  if (mimeType.length === 0 || mimeType.length > MAX_MIME_BYTES || !/^[\x20-\x7e]+$/.test(mimeType)) {
-    throw new Error(`a FastFS mime type must be 1-${MAX_MIME_BYTES} printable ASCII characters`);
-  }
-}
-
-/**
- * `FastfsData::Partial` for one 1 MiB chunk:
- * enum tag `0x01`, `s(relative_path)`, u32-LE `offset`, u32-LE `full_size`,
- * `s(mime_type)`, `s(content_chunk)`, u32-LE `nonce`, where `s(x)` is a u32-LE byte length
- * followed by the bytes. Every chunk of one upload repeats the same nonce.
- */
-function partialFastfsPayload(
-  relativePath: string,
-  mimeType: string,
-  chunk: Uint8Array,
-  offset: number,
-  fullSize: number,
-  nonce: number,
-): Uint8Array {
-  assertRelativePath(relativePath);
-  assertMimeType(mimeType);
-  if (!Number.isInteger(fullSize) || fullSize < 1 || fullSize > MAX_MEDIA_BYTES) {
-    throw new Error(`full_size must be 1-${MAX_MEDIA_BYTES} bytes, received ${String(fullSize)}`);
-  }
-  if (!Number.isInteger(offset) || offset < 0 || offset >= fullSize || offset % CHUNK_BYTES !== 0) {
-    throw new Error(`offset must be a 1 MiB-aligned position below full_size, received ${String(offset)}`);
-  }
-  if (chunk.byteLength === 0 || chunk.byteLength > CHUNK_BYTES) {
-    throw new Error(`a Partial chunk must carry 1-${CHUNK_BYTES} bytes, received ${chunk.byteLength}`);
-  }
-  if (offset + chunk.byteLength > fullSize) {
-    throw new Error("the chunk extends past full_size");
-  }
-  if (!Number.isInteger(nonce) || nonce < 1 || nonce > 2_147_483_647) {
-    throw new Error(`nonce must be in 1..=2147483647, received ${String(nonce)}`);
-  }
-  return concatBytes([
-    new Uint8Array([0x01]),
-    borshString(relativePath),
-    borshU32(offset, "offset"),
-    borshU32(fullSize, "full_size"),
-    borshString(mimeType),
-    borshString(chunk),
-    borshU32(nonce, "nonce"),
-  ]);
-}
 
 async function sha256Hex(content: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", content);

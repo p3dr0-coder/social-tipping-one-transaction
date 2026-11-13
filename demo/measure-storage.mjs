@@ -24,7 +24,7 @@ import {
 } from "./lib/near-rpc.mjs";
 
 const NETWORK = (process.env.PHILIA_NETWORK ?? "testnet").trim().toLowerCase();
-const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org";
+const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.fastnear.com";
 const CONTRACT = (process.env.PHILIA_CONTRACT ?? "").trim();
 const ATTACHED_GAS = teraToGas("30");
 const DEPOSIT = 10n ** 22n; // 0.01 NEAR
@@ -60,7 +60,7 @@ if (!CONTRACT) {
 }
 if (/mainnet/i.test(RPC_URL) || CONTRACT.toLowerCase().endsWith(".near")) {
   fail(
-    `this measurement is testnet-only; point NEAR_RPC_URL at https://rpc.testnet.near.org and PHILIA_CONTRACT at a *.testnet contract (got ${JSON.stringify(CONTRACT)})`,
+    `this measurement is testnet-only; point NEAR_RPC_URL at https://rpc.testnet.fastnear.com and PHILIA_CONTRACT at a *.testnet contract (got ${JSON.stringify(CONTRACT)})`,
   );
 }
 if (LONG_AMOUNT.length !== UPDATE_AMOUNT.length) {
@@ -230,7 +230,7 @@ const status = await rpc("status", []);
 const protocolVersion = status?.protocol_version;
 if (status?.chain_id !== "testnet") {
   fail(
-    `${RPC_URL} reports chain_id ${JSON.stringify(status?.chain_id)}; this measurement is testnet-only, so point NEAR_RPC_URL at https://rpc.testnet.near.org`,
+    `${RPC_URL} reports chain_id ${JSON.stringify(status?.chain_id)}; this measurement is testnet-only, so point NEAR_RPC_URL at https://rpc.testnet.fastnear.com`,
   );
 }
 console.error(`measure-storage: ${RPC_URL} protocol ${protocolVersion}, ${CONTRACT}, signer ${signer} (${signerSource})`);

@@ -2,6 +2,7 @@ import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
 import type { SignAndSendTransactionParams } from "./near-provider";
 import { extractTxHash } from "./tx";
+import { fastDataKey, fetchFastDataLatest, fetchFastDataMulti } from "./fastdata";
 import {
   createPost as createTestnetPost,
   follow as testnetFollow,
@@ -177,8 +178,6 @@ export function reputationFor(followers: number): { label: string; minimumFollow
   return REPUTATION_TIERS.find(tier => followers >= tier.minimumFollowers) ?? null;
 }
 
-
-
 function toError(value: unknown): Error {
   if (value instanceof Error) return value;
   if (typeof value === "string") return new Error(value);
@@ -322,9 +321,7 @@ export async function confirmTx(hash: string, options: ConfirmTxOptions = {}): P
     }
 
     if (Date.now() - startedAt > timeoutMs) {
-      const timeoutError = new Error(
-        `social write ${hash} was not indexed within ${Math.round(timeoutMs / 1_000)} s`,
-      );
+      const timeoutError = new Error(`social write ${hash} was not indexed within ${Math.round(timeoutMs / 1_000)} s`);
       if (options.fallback) {
         let observed: boolean;
         try {
@@ -376,8 +373,6 @@ export function fetchGlobalFeed(cursor?: string, limit?: number, viewer?: string
   if (nearConfig.network === "testnet") return testnetActivityFeed(clampLimit(limit));
   return fetchJson<FeedPage<FeedItem>>("/v1/feed/global", { limit: clampLimit(limit), cursor, viewer });
 }
-
-
 
 export async function fetchAccount(accountId: string, viewer?: string | null): Promise<AccountProfile> {
   if (!isValidAccountId(accountId)) throw new Error(`"${accountId}" is not a valid account id`);
@@ -480,6 +475,18 @@ export async function fetchNotifications(
 
 export async function isFollowing(target: string, viewer: string): Promise<boolean> {
   if (viewer === target) return false;
+  if (nearConfig.network === "mainnet") {
+    try {
+      const rows = await fetchFastDataLatest({
+        currentAccountId: nearConfig.socialReceiver,
+        predecessorId: viewer,
+        key: `graph/follow/${target}`,
+      });
+      if (rows.length > 0) return rows[0].value !== null;
+    } catch {
+      // The indexer read below is the fallback when the FastData API is unavailable.
+    }
+  }
   const profile = await fetchAccount(target, viewer);
   if (profile.viewerFollowing !== undefined) return profile.viewerFollowing;
 
@@ -541,8 +548,12 @@ export async function createPost(text: string, wallet: WalletConnection): Promis
   const hash = await kvWrite({ [`post/${id}`]: { text: body } }, wallet);
   await confirmTx(hash, {
     fallback: async () => {
-      const page = await fetchAccountPosts(accountId, undefined, 100);
-      return page.items.some(item => item.post.id === id);
+      const rows = await fetchFastDataLatest({
+        currentAccountId: nearConfig.socialReceiver,
+        predecessorId: accountId,
+        key: `post/${id}`,
+      });
+      return rows.length > 0 && rows[0].value !== null;
     },
   });
   return hash;
@@ -594,9 +605,14 @@ export async function saveProfile(update: ProfileUpdate, wallet: WalletConnectio
   const hash = await kvWrite(data, wallet);
   await confirmTx(hash, {
     fallback: async () => {
-      const profile = await fetchAccount(accountId);
-      if (profile.about !== about || (profile.name ?? "") !== name) return false;
-      if (update.avatar !== undefined && profile.avatar !== update.avatar) return false;
+      const rows = await fetchFastDataMulti([
+        fastDataKey(nearConfig.socialReceiver, accountId, "profile/about"),
+        fastDataKey(nearConfig.socialReceiver, accountId, "profile/name"),
+        ...(update.avatar !== undefined ? [fastDataKey(nearConfig.socialReceiver, accountId, "profile/avatar")] : []),
+      ]);
+      const values = new Map(rows.map(row => [row.key, row.value]));
+      if (values.get("profile/about") !== about || values.get("profile/name") !== name) return false;
+      if (update.avatar !== undefined && values.get("profile/avatar") !== update.avatar) return false;
       return true;
     },
   });

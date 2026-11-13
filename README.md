@@ -396,6 +396,7 @@ pnpm dev                 # web app
 pnpm build               # production build
 pnpm lint                # next lint
 pnpm check-types         # tsc --noEmit
+pnpm test                # node --test: FastFS codec, FastData core, byte codecs
 cd contract && cargo test --lib   # decimal parser unit tests, no node
 cd contract && cargo test         # sandbox integration test (Linux or macOS)
 node demo/social-loop.mjs         # zero-funds testnet loop

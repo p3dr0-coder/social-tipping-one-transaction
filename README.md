@@ -59,7 +59,8 @@ near-philia/
 
 ## Quickstart
 
-Prerequisites: Node.js >= 22.22.2, pnpm >= 10.4.1, Rust 1.95.0 with
+Prerequisites: Node.js >= 26.0.0 (the app uses `Map.getOrInsert` and the `Uint8Array`
+base64/hex codecs from V8 14.6), pnpm >= 10.4.1, Rust 1.95.0 with
 `wasm32-unknown-unknown`, `cargo-near` 0.23.0, and `near-cli-rs` 0.31.1.
 
 ```bash

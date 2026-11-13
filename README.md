@@ -1,27 +1,27 @@
 # philia — sovereign social on NEAR
 
-philia is a small, fully on-chain social app. Profiles, posts, follow edges, and tip
-preferences live in NEAR-native storage; there is no application database and no server-side
-account system. A named NEAR account is the identity, the wallet is the login, and the social
-graph is public data that any client can read.
+philia is a small, fully on-chain social app. Profiles, posts, follow edges, and tip preferences
+live in NEAR-native storage. There is no application database and no server-side account system.
+A named NEAR account is the identity. The wallet is the login. The social graph is public data
+that any client can read.
 
-The app ships with a Rust contract for tipping preferences and a zero-funds testnet demo that
-walks the whole loop: set a profile, publish a post, follow someone, read the feed and the
-follower list, and settle a tip.
+The app ships with a Rust contract for tipping preferences. It also ships a zero-funds testnet
+demo that walks the whole loop: set a profile, publish a post, follow someone, read the feed and
+the follower list, and settle a tip.
 
 ## What you can do
 
-- Sign in with a named NEAR account — no email, password, or app account record.
+- Sign in with a named NEAR account. No email, password, or app account record is stored.
 - Set a profile: display name, bio, and an avatar uploaded to FastFS.
-- Publish a post as one append-only key on the mainnet FastData path; the testnet SocialDB
+- Publish a post as one append-only key on the mainnet FastData path. On testnet the SocialDB
   adapter stores the latest main post instead (SocialDB semantics).
-- Follow and unfollow, and read the global feed plus any account's follower/following lists.
+- Follow and unfollow. Read the global feed plus any account's follower/following lists.
 - See a reputation badge derived from indexer follower counts (≥10 / ≥100 / ≥1,000).
-- Set a tip preference once per account, then tip in the NEP-141 token that deployment is
+- Set a tip preference once per account. Then tip in the NEP-141 token that deployment is
   bound to.
-- On the mainnet FastData path, confirm every write by transaction hash through the indexer,
-  including the keys the indexer rejected; testnet SocialDB writes return after wallet
-  submission because api2 is mainnet-only.
+- On the mainnet FastData path, confirm every write by transaction hash through the indexer.
+  The confirmation includes the keys the indexer rejected. Testnet SocialDB writes return after
+  wallet submission because api2 is mainnet-only.
 
 ## Architecture
 
@@ -77,26 +77,24 @@ bash scripts/deploy.sh
 
 ```
 
-`scripts/deploy.sh` deploys to `PHILIA_CONTRACT` (default `philia.testnet`) with
-`TIP_FT` (default Circle testnet USDC, 6 decimals) and `TIP_DECIMALS` (default 6) in the init
-call; the init binds one token for the life of that deployment. To deploy another binding,
-export the three variables, for example:
+`scripts/deploy.sh` deploys to `PHILIA_CONTRACT` (default `philia.testnet`). The init call carries
+`TIP_FT` (default Circle testnet USDC, 6 decimals) and `TIP_DECIMALS` (default 6). The init binds
+one token for the life of that deployment. To deploy another binding, export the three variables:
 
 ```bash
 PHILIA_CONTRACT=tips.philia.testnet TIP_FT=wrap.testnet TIP_DECIMALS=24 bash scripts/deploy.sh
 ```
 
-The recorded zero-funds run used that wNEAR binding: `tips.philia.testnet` initialized with
-`ft_account_id=wrap.testnet`, `decimals=24`, 1 NEAR wrapped from the faucet, and `bob`
-registered with the token. Whatever you deploy, the demo's `PHILIA_CONTRACT` and `TIP_FT` must
-match the contract's `get_tip_token()`, and `NEXT_PUBLIC_PHILIA_CONTRACT` in `web/.env.local`
-must name the same account; a mismatch is a deployment error, not a tip error.
+The recorded zero-funds run used that wNEAR binding. `tips.philia.testnet` initialized with
+`ft_account_id=wrap.testnet`, `decimals=24`, 1 NEAR wrapped from the faucet, and `bob` registered
+with the token. Whatever you deploy, the demo's `PHILIA_CONTRACT` and `TIP_FT` must match the
+contract's `get_tip_token()`. `NEXT_PUBLIC_PHILIA_CONTRACT` in `web/.env.local` must name the same
+account. A mismatch is a deployment error, not a tip error.
 
-Step 5. Export the demo keys in your shell (never in a file that git tracks), then run the
-loop. `PHILIA_CONTRACT` and `TIP_FT` reproduce the default `deploy.sh` binding; the demo
-registers the receiver but does not mint the tip token, so fund `alice` with the bound token
-(the Circle testnet faucet issues testnet USDC) or deploy and use the wNEAR binding described
-above.
+Step 5. Export the demo keys in your shell. Never put them in a file that git tracks. Then run the
+loop. `PHILIA_CONTRACT` and `TIP_FT` reproduce the default `deploy.sh` binding. The demo registers
+the receiver but does not mint the tip token. Fund `alice` with the bound token (the Circle testnet
+faucet issues testnet USDC), or deploy and use the wNEAR binding described above.
 
 ```bash
 export ALICE_ACCOUNT=alice.philia.testnet
@@ -125,7 +123,7 @@ For the cost side, `demo/measure.mjs` records gas, fees, and confirmation/indexi
 `demo/measure-storage.mjs` records the tips-contract storage cost; see [Numbers](#numbers).
 
 The mainnet social path spends real funds. It writes `__fastdata_kv` to `social`, confirms
-`/v1/tx`, and reads api2; the tip runs only when `TIP_FT`, `BOB_ACCOUNT` and `PHILIA_CONTRACT`
+`/v1/tx`, and reads api2. The tip runs only when `TIP_FT`, `BOB_ACCOUNT`, and `PHILIA_CONTRACT`
 are also set:
 
 ```bash
@@ -134,29 +132,26 @@ PHILIA_NETWORK=mainnet ALICE_ACCOUNT=you.near ALICE_PRIVATE_KEY=... node demo/so
 
 ## `CodeDoesNotExist` is success
 
-`social` is a data account, not a contract account. A `__fastdata_kv` call therefore returns
-`CodeDoesNotExist` from the runtime while the transaction and its receipts succeed. philia does
-not retry that answer. It extracts the transaction hash, polls
-`https://api2.near.social/v1/tx/{hash}` every 1.5 seconds, and reports the write as done only
-when `indexed` is `true` **and** every `actions[].keys[].status` is `ok`. A key that comes back
-`invalid`, `ignored` (a key the indexer does not know), `rate_limited`, `key_too_long`, or
-`value_too_large`, or an action that comes back
-`too_many_keys`, `invalid_json`, or `invalid_borsh`, is surfaced to the UI with the key and
-status that failed. The endpoint keeps roughly the last 200k transactions, so confirmation is
-prompt and a stale hash is reported as such instead of being retried.
+`social` is a data account. It has no contract code. A `__fastdata_kv` call returns
+`CodeDoesNotExist` from the runtime. The transaction and its receipts still succeed. philia does
+not retry that answer. It extracts the transaction hash. It polls
+`https://api2.near.social/v1/tx/{hash}` every 1.5 seconds. It reports the write as done only when
+`indexed` is `true` and every `actions[].keys[].status` is `ok`. A key with status `invalid`,
+`ignored`, `rate_limited`, `key_too_long`, or `value_too_large` fails the write. An action with
+`too_many_keys`, `invalid_json`, or `invalid_borsh` fails the write. The UI shows the key and
+status that failed. The endpoint keeps roughly the last 200k transactions. A stale hash is
+reported as such. The write is never retried.
 
 ## NEP-413 authentication and replay
 
-`web/lib/auth.ts` verifies NEP-413 signatures with `near-api-js/nep413`
-`verifyMessage`. The library reads the signing key from the chain, requires
-`FullAccess`, and checks the message, recipient, nonce, and optional callback URL that the
-wallet signed.
+`web/lib/auth.ts` verifies NEP-413 signatures with `near-api-js/nep413` `verifyMessage`. The
+library reads the signing key from the chain. It requires `FullAccess`. It checks the message,
+recipient, nonce, and optional callback URL that the wallet signed.
 
-The verifier does not store nonces, and this repository has no backend authentication
-endpoint. A production backend MUST generate the 32-byte nonce for each session, bind it to
-that session, compare `recipient` with its own value, and accept each nonce once. Reject a
-replayed signature even when the signature is cryptographically valid. A signature is not a
-standalone bearer token.
+The verifier does not store nonces. This repository has no backend authentication endpoint. A
+production backend MUST generate the 32-byte nonce for each session. It MUST bind the nonce to
+that session. It MUST compare `recipient` with its own value. It MUST accept each nonce once.
+Reject a replayed signature, even when the signature is valid. A signature is not a bearer token.
 
 ## Limits and costs
 
@@ -176,31 +171,31 @@ FastData enforces these per UTC day (over-quota writes return `rate_limited`):
 
 Edits and deletes keep public history. Avatars are capped at 1 MiB per FastFS upload.
 
-**Account creation.** A named account costs **0.007 NEAR** in gas, which covers the first
-**770 bytes** of its data. Any data beyond 770 bytes is staked by the account at 1e19 yocto per
-byte (NEP-448) — an account holding only its name pays nothing extra, while a contract account
-stakes its code and state. `scripts/create-accounts.sh` creates the top-level account from the
-faucet and the two demo sub-accounts from their parent with a 0.1 NEAR balance.
+**Account creation.** A named account costs **0.007 NEAR** in gas. That covers the first **770
+bytes** of its data. Data beyond 770 bytes is staked at 1e19 yocto per byte (NEP-448). An account
+holding only its name pays nothing extra. A contract account stakes its code and state.
+`scripts/create-accounts.sh` creates the top-level account from the faucet. It creates the two
+demo sub-accounts from their parent with a 0.1 NEAR balance.
 
-**SocialDB on the testnet demo path.** `v1.social08.testnet` requires a storage balance of
-0.02 NEAR (`storage_balance_bounds`); the demo attaches 0.05 and keeps the surplus in the
-account's storage balance.
+**SocialDB on the testnet demo path.** `v1.social08.testnet` requires a storage balance of 0.02
+NEAR (`storage_balance_bounds`). The demo attaches 0.05. The surplus stays in the account's
+storage balance.
 
-**Tip-preference storage.** Any `set_tip_preference` call that grows storage needs an attached
-deposit; an equal-length update is deposit-free, and a shrink refunds the freed bytes. An entry
-is a key of at most 64 bytes plus the value and the map's record overhead, so at 1e19 yocto per
-byte (≈0.01024 NEAR/KB) an entry lands at roughly **0.001–0.002 NEAR**. The measured bytes and
-cost for this contract are produced by `demo/measure-storage.mjs`; see [Numbers](#numbers).
+**Tip-preference storage.** A `set_tip_preference` call that grows storage needs an attached
+deposit. An equal-length update is deposit-free. A shrink refunds the freed bytes. An entry is a
+key of at most 64 bytes plus the value and the map's record overhead. At 1e19 yocto per byte
+(≈0.01024 NEAR/KB), an entry lands at roughly **0.001–0.002 NEAR**. `demo/measure-storage.mjs`
+produces the measured bytes and cost for this contract; see [Numbers](#numbers).
 
 **Function-call key.** The app's access key signs only zero-deposit calls to `__fastdata_kv` and
-`__fastdata_fastfs`. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` (variable) therefore
-always fall back to wallet signing; the access-key allowance is not a spend limit.
+`__fastdata_fastfs`. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` (variable) therefore always
+fall back to wallet signing. The access-key allowance is not a spend limit.
 
-**Testnet vs mainnet.** Testnet SocialDB writes go to `v1.social08.testnet` and are **not**
-indexed by api2; raw testnet FastData writes (`__fastdata_kv` to `social`) are indexed by
-`kv.test.fastnear.com`. Mainnet writes go to `social` and are read through
-`api2.near.social`. The app selects the adapter from `NEXT_PUBLIC_NEAR_NETWORK`. The testnet
-demo spends only faucet-derived funds; the mainnet form of the same command spends real tokens.
+**Testnet vs mainnet.** Testnet SocialDB writes go to `v1.social08.testnet`. api2 does **not**
+index them. Raw testnet FastData writes (`__fastdata_kv` to `social`) are indexed by
+`kv.test.fastnear.com`. Mainnet writes go to `social` and are read through `api2.near.social`. The
+app selects the adapter from `NEXT_PUBLIC_NEAR_NETWORK`. The testnet demo spends only
+faucet-derived funds. The mainnet form of the same command spends real tokens.
 
 The browser and demo default to `https://rpc.testnet.fastnear.com` on testnet. Set
 `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL` to override the endpoint.
@@ -212,8 +207,8 @@ more.
 
 ## Tip assets and fees
 
-A tip is one NEP-141 `ft_transfer`, so the token is fixed per tips-contract deployment. In order
-of preference:
+A tip is one NEP-141 `ft_transfer`. The token is fixed per tips-contract deployment. In order of
+preference:
 
 | Path | Asset | Decimals | Use |
 |---|---|---|---|
@@ -222,18 +217,18 @@ of preference:
 | Last resort | Self-deployed NEP-141 at `tip.philia.testnet` | deployment-defined | When neither token above can be used |
 
 The self-deployed path is a local NEP-141 (for example the near-examples FT wasm, or
-`#[derive(FungibleToken)]` from `near-sdk-contract-tools`) deployed with `new_default_meta` and
-then bound by a tips-contract deployment with the same decimals. The shared token factory is not
-a path: the global FT accounts a `use-global-account-id` deploy would rely on have no contract
-code today, so that deploy fails; self-deploy local code instead.
+`#[derive(FungibleToken)]` from `near-sdk-contract-tools`). Deploy it with `new_default_meta`.
+Then bind it by a tips-contract deployment with the same decimals. The shared token factory is
+not a path. The global FT accounts a `use-global-account-id` deploy would rely on have no
+contract code today, so that deploy fails. Deploy local code instead.
 
-Use the Circle-listed native USDC accounts, never bridged USDC.e: USDC.e is not redeemable
-through Circle. The app reads `get_tip_token()` for the account and decimals bound at deploy;
-it does not assume 6 everywhere.
+Use the Circle-listed native USDC accounts, never bridged USDC.e. USDC.e is not redeemable
+through Circle. The app reads `get_tip_token()` for the account and decimals bound at deploy. It
+does not assume 6 everywhere.
 
 Before the first transfer to an author, the app reads `storage_balance_of`. A `null` result
-means the author is unregistered, and the registration attaches the token's own
-`storage_balance_bounds.min`. Never attach a remembered `0.00125`: that is the example FT's
+means the author is unregistered. The registration attaches the token's own
+`storage_balance_bounds.min`. Never attach a remembered `0.00125`. That is the example FT's
 minimum, not USDC's.
 
 wNEAR fallback on testnet (near-cli-rs; deploy the contract with `decimals=24` and
@@ -245,18 +240,19 @@ near call wrap.testnet storage_deposit '{"account_id":"bob.philia.testnet"}' --d
 near call wrap.testnet ft_transfer '{"receiver_id":"bob.philia.testnet","amount":"1000000000000000000000000"}' --deposit-yocto 1 --use-account alice.philia.testnet --network-id testnet
 ```
 
-The `0.00125` in that manual example is `wrap.testnet`'s own storage minimum, not a value to
-reuse for another token; the app still reads `storage_balance_bounds` per token.
+The `0.00125` in that manual example is `wrap.testnet`'s own storage minimum. Do not reuse it for
+another token; the app still reads `storage_balance_bounds` per token.
 
-The optional cross-chain tip path uses 1Click (`POST /v0/quote` with `destinationAsset` set to
-the native USDC asset id `nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1` and
-`dry: true` for a preview). Fees are 25 bps for unauthenticated quotes, 20 bps authenticated,
-and 1 bp for stablecoin pairs; the "0.2%" figure is the authenticated default. 1Click's own
-documented default since 2026-10-27 is confidential settlement of the swap, so
-`GET /v0/status?depositAddress=…` may report `nearTxHashes` that are shield/unshield
-transactions rather than a public swap hash. philia makes no privacy claim of its own; this is
-simply the upstream API's behavior. `SUCCESS` is the only success state; `REFUNDED`, `FAILED`,
-and `INCOMPLETE_DEPOSIT` are terminal failures that carry the refund reason.
+The optional cross-chain tip path uses 1Click. Send `POST /v0/quote` with `destinationAsset` set
+to the native USDC asset id
+`nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1` and `dry: true` for a
+preview. Fees are 25 bps for unauthenticated quotes, 20 bps authenticated, and 1 bp for
+stablecoin pairs. The "0.2%" figure is the authenticated default. 1Click's documented default
+since 2026-10-27 is confidential settlement of the swap. `GET /v0/status?depositAddress=…` may
+report `nearTxHashes` that are shield/unshield transactions rather than a public swap hash.
+philia makes no privacy claim of its own. This is the upstream API's behavior. `SUCCESS` is the
+only success state. `REFUNDED`, `FAILED`, and `INCOMPLETE_DEPOSIT` are terminal failures that
+carry the refund reason.
 
 ## Numbers
 
@@ -283,65 +279,64 @@ export TIP_AMOUNT=0.001
 node demo/measure-tip.mjs
 ```
 
-**Measured (`measure.mjs`, 10/10 samples):** a ~1 KB FastData write burns
-**1.473364542367 Tgas** and **0.0001250181979867 N** (`tokens_burnt`), reaches RPC `FINAL` in
-**3,798 ms** on average, and is visible in the testnet KV index in **3,958 ms** on average.
-Protocol **88**. The full-access demo key consumes **0** function-call-key allowance; a
-function-call key is not exercised by this run.
+**Measured (`measure.mjs`, 10/10 samples):** a ~1 KB FastData write burns **1.473364542367 Tgas**
+and **0.0001250181979867 N** (`tokens_burnt`). It reaches RPC `FINAL` in **3,798 ms** on average.
+It is visible in the testnet KV index in **3,958 ms** on average. Protocol **88**. The full-access
+demo key consumes **0** function-call-key allowance. This run does not exercise a function-call
+key.
 
 **Measured (`measure-tip.mjs`, rerun):** a 30 Tgas `ft_transfer` with a 1-yocto deposit burns
-**2.391197807527 Tgas** and **0.000216801525 N**; the two runs agree exactly on gas/tokens
+**2.391197807527 Tgas** and **0.000216801525 N**. The two runs agree exactly on gas and tokens
 (`FINAL` in 4.2 s and 3.9 s).
 
-**Measured (`measure-storage.mjs`, protocol 88):** storage byte cost is exactly
-**1e19 yocto/B**. A 94-byte preference entry costs **0.00094 N** (**0.01024 N/KB**); an
-equal-length update grows 0 bytes and costs 0 storage; a 23-byte shrink refunds **0.00023 N**
-(the excess 0.01 N deposit is returned too).
+**Measured (`measure-storage.mjs`, protocol 88):** storage byte cost is exactly **1e19 yocto/B**.
+A 94-byte preference entry costs **0.00094 N** (**0.01024 N/KB**). An equal-length update grows 0
+bytes and costs 0 storage. A 23-byte shrink refunds **0.00023 N** (the excess 0.01 N deposit is
+returned too).
 
 On testnet the `social` account has no contract code, so the measurement writes return
-`AccountDoesNotExist` by design; the testnet FastData index still records them, and the script
-treats that expected failure as success. `/v1/tx` is mainnet-only; the app's mainnet path uses
-it, while this testnet measurement combines RPC `tx_status FINAL` with the KV-index latency.
-All three scripts refuse mainnet and exit non-zero on an unexpected failure.
+`AccountDoesNotExist` by design. The testnet FastData index still records them. The script treats
+that expected failure as success. `/v1/tx` is mainnet-only. The app's mainnet path uses it. This
+testnet measurement combines RPC `tx_status FINAL` with the KV-index latency. All three scripts
+refuse mainnet and exit non-zero on an unexpected failure.
 
 ## Origin, license, and attribution
 
 This project is a port of **SocialENS** (MIT), `https://github.com/NikhilRaikwar/SocialENS` —
-created 2026-02-08, last commit 2026-03-14, **2 stars**. Its pedigree is real: SocialENS won the
+created 2026-02-08, last commit 2026-03-14, **2 stars**. Its pedigree is real. SocialENS won the
 ENS "Integrate ENS" pool prize at **ETHGlobal HackMoney 2026**, recorded at
 `https://ethglobal.com/showcase/socialens-jps0p`. Its traction is not: two stars and no commits
-since March 2026, so this port keeps the presentation layer and rebuilds the data, wallet, and
+since March 2026. This port keeps the presentation layer and rebuilds the data, wallet, and
 payment layers rather than inheriting the implementation. The prize and the design are the
-asset; the repository is not.
+asset. The repository is not.
 
 Bugs in the origin that this port fixes:
 
 - **Tip-preference key mismatch.** The profile page wrote one text-record key while both tip
-  readers read a different one, so a saved preference was never used and every tip fell back to
-  `0.1`. philia has one source of truth, the tips contract, and prices every tip from
+  readers read a different one. A saved preference was never used, and every tip fell back to
+  `0.1`. philia has one source of truth, the tips contract. It prices every tip from
   `get_tip_preference(author)`.
 - **Dead follower count.** The origin read a followers text record that it never wrote, so the
   count was always 0. philia reads `counts.followers` from the indexer and the actual list from
   `/v1/accounts/{id}/followers`.
 - **20-cast cap and 20,000-block window.** Every new cast rewrote a JSON array sliced to the 20
-  newest casts, and user discovery scanned only the last 20,000 blocks; older history and
-  older users disappeared. philia writes one append-only key per post and reads full-history
-  indexer feeds, so neither cap exists.
+  newest casts. User discovery scanned only the last 20,000 blocks. Older history and older users
+  disappeared. philia writes one append-only key per post and reads full-history indexer feeds, so
+  neither cap exists.
 - **Asset mismatch in the docs.** The origin's README described ETH tips while the code
-  transferred Sepolia USDC. philia tips are NEP-141 only, and the token and decimals are read
-  from the contract bound at deploy.
+  transferred Sepolia USDC. philia tips are NEP-141 only. The token and decimals are read from the
+  contract bound at deploy.
 
-The original license text is preserved in [`LICENSE`](./LICENSE); the origin repository, the
-reused presentation layer, and the rewritten data/wallet/payment layers are itemized in
-[`ATTRIBUTION.md`](./ATTRIBUTION.md). The origin was generated from the Scaffold-ETH 2
-baseline; that disclosure is in [`NOTICE`](./NOTICE). The EVM scaffold — hardhat workspace,
-wagmi/RainbowKit connectors, deployed-contract fixtures — is deleted, not adapted.
+The original license text is preserved in [`LICENSE`](./LICENSE). [`ATTRIBUTION.md`](./ATTRIBUTION.md)
+itemizes the origin repository, the reused presentation layer, and the rewritten data/wallet/payment
+layers. The origin was generated from the Scaffold-ETH 2 baseline; that disclosure is in
+[`NOTICE`](./NOTICE). The EVM scaffold — hardhat workspace, wagmi/RainbowKit connectors,
+deployed-contract fixtures — is deleted, not adapted.
 
 ## Hackathon fit and adjudication
 
-The submission track is `social`. The hackathon brief's SputnikDAO and Trezu references are
-hints, not dependencies: philia uses neither, and it does not claim to implement a DAO or a
-treasury.
+The submission track is `social`. The hackathon brief's SputnikDAO and Trezu references are hints,
+not dependencies. philia uses neither. It does not claim to implement a DAO or a treasury.
 
 What the port does lean on:
 
@@ -352,50 +347,47 @@ What the port does lean on:
 - **Client-derived tiers** — follower tiers (≥10 / ≥100 / ≥1,000) are computed in the client
   from indexer counts. No tier, score, or reputation value is stored on-chain.
 
-There is no privacy layer, no NFT-as-wallet mechanism, and no spend firewall. The wallet is a
-NEAR account; the function-call key signs only zero-deposit social writes, and every payable
-call falls back to wallet signing rather than being filtered by the app.
+There is no privacy layer, no NFT-as-wallet mechanism, and no spend firewall. The wallet is a NEAR
+account. The function-call key signs only zero-deposit social writes. Every payable call falls back
+to wallet signing rather than being filtered by the app.
 
 ## Known constraints
 
-- **Testnet and mainnet social paths differ.** `api2.near.social` indexes mainnet `social`
-  writes only. Testnet writes go to the SocialDB contract (`v1.social08.testnet`) and reads go
-  through `near-social-js`; raw testnet FastData writes are indexed by
-  `kv.test.fastnear.com`, but there is no testnet derived-feed API. The app selects the
-  adapter from `NEXT_PUBLIC_NEAR_NETWORK`.
+- **Testnet and mainnet social paths differ.** `api2.near.social` indexes mainnet `social` writes
+  only. Testnet writes go to the SocialDB contract (`v1.social08.testnet`), and reads go through
+  `near-social-js`. Raw testnet FastData writes are indexed by `kv.test.fastnear.com`. There is no
+  testnet derived-feed API. The app selects the adapter from `NEXT_PUBLIC_NEAR_NETWORK`.
 - **The function-call access key cannot attach a deposit.** App-scoped signing covers only
-  zero-deposit calls to `__fastdata_kv` and `__fastdata_fastfs` on `social`. Tipping (1 yocto
-  on `ft_transfer`), storage registration, and any payable contract call fall back to normal
-  wallet signing. This is expected behavior, not a failure.
-- **Avatars are capped at 1 MiB.** Larger media is uploaded as 1 MiB `Partial` chunks
-  (reassembled up to 32 MiB); avatars stay on the single-transaction `Simple` path.
+  zero-deposit calls to `__fastdata_kv` and `__fastdata_fastfs` on `social`. Tipping (1 yocto on
+  `ft_transfer`), storage registration, and any payable contract call fall back to normal wallet
+  signing. This is expected behavior, not a failure.
+- **Avatars are capped at 1 MiB.** Larger media is uploaded as 1 MiB `Partial` chunks, reassembled
+  up to 32 MiB. Avatars stay on the single-transaction `Simple` path.
 - **Reputation tiers are derived, not stored.** The UI reads `counts.followers` from
-  `/v1/accounts/{id}` and labels ≥10 / ≥100 / ≥1,000 followers; no tier exists in the tips
-  contract or any other on-chain state.
+  `/v1/accounts/{id}` and labels ≥10 / ≥100 / ≥1,000 followers. No tier exists in the tips contract
+  or any other on-chain state.
 
 ## Before you submit (human-only)
 
 Nothing in this repository submits an application, and no submission was made from it. The
 following is the checklist for the person who does:
 
-- Build the **11-field payload** exactly as the submission form defines it. `website` is not
-  one of the 11 fields — omit it entirely rather than sending an empty string (it is a spam
-  trap).
-- Set `tracks: ["social"]`; add a second track only if the work genuinely covers it.
-- Generate a **fresh UUID `requestId`** for the application, and reuse that same value if the
-  request is retried.
+- Build the **11-field payload** exactly as the submission form defines it. `website` is not one of
+  the 11 fields. Omit it entirely rather than sending an empty string (it is a spam trap).
+- Set `tracks: ["social"]`. Add a second track only if the work genuinely covers it.
+- Generate a **fresh UUID `requestId`** for the application. Reuse that same value if the request is
+  retried.
 - Print the full JSON payload and read the contact notice before sending. Send only after an
   explicit "yes".
-- On **403**, tell the human and stop. Do not retry, do not reformat the payload, and do not
-  swap the `requestId`.
-- **201** means saved. If a field is wrong after that, use `/request-changes`; never resubmit
-  the application.
-- X demo: a video of two minutes or less, tagged **@NEARProtocol + #NEARHackathon**.
-- Demo host options (optional — a local-only demo is acceptable): Vercel Hobby, GitHub Pages
-  for a static export, or Netlify Free. Any hosted URL must stay alive through Nov 18, ideally
-  Nov 25.
-- Do not put a number, video URL, or hosted-demo URL in the payload before that artifact
-  exists; the WORKLOG is the source for measured values.
+- On **403**, tell the human and stop. Do not retry. Do not reformat the payload. Do not swap the
+  `requestId`.
+- **201** means saved. If a field is wrong after that, use `/request-changes`. Never resubmit the
+  application.
+- X demo: a video of two minutes or less. Tag **@NEARProtocol + #NEARHackathon**.
+- Demo host options (optional — a local-only demo is acceptable): Vercel Hobby, GitHub Pages for a
+  static export, or Netlify Free. Any hosted URL must stay alive through Nov 18, ideally Nov 25.
+- Do not put a number, video URL, or hosted-demo URL in the payload before that artifact exists.
+  The WORKLOG is the source for measured values.
 
 ## Development commands
 

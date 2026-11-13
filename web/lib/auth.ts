@@ -1,6 +1,7 @@
 import { JsonRpcProvider } from "near-api-js";
 import { verifyMessage } from "near-api-js/nep413";
-import { nearConfig } from "~~/near.config";
+import { decodeBase64 as decodeBase64Strict } from "./bytes.ts";
+import { nearConfig } from "../near.config.ts";
 
 /** NEP-413 nonces are exactly 32 random bytes. */
 export const AUTH_NONCE_BYTES = 32;
@@ -73,16 +74,7 @@ function toError(value: unknown): Error {
 }
 
 function decodeBase64(value: string): Uint8Array {
-  let binary: string;
-  try {
-    binary = atob(value);
-  } catch {
-    throw new Error("the wallet returned a signature that is not valid base64");
-  }
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
+  const bytes = decodeBase64Strict(value);
   if (bytes.byteLength === 0) throw new Error("the wallet returned an empty signature");
   return bytes;
 }

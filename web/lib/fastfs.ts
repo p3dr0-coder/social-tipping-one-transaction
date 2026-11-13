@@ -1,4 +1,5 @@
 import { teraToGas } from "near-api-js";
+import { encodeHex } from "./bytes";
 import { nearConfig } from "~~/near.config";
 import { confirmTx, extractTxHash, type WalletConnection } from "./social";
 
@@ -17,9 +18,7 @@ const GATEWAY_POLL_TIMEOUT_MS = 30_000;
 
 async function sha256Hex(content: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", content);
-  return Array.from(new Uint8Array(digest))
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return encodeHex(new Uint8Array(digest));
 }
 
 async function canonicalizeToWebp(file: File): Promise<Uint8Array> {

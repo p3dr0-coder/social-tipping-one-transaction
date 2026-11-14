@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import { timeAgo } from "~~/lib/time";
 import { Avatar } from "./Avatar";
 import { FollowButton } from "./FollowButton";
 import { useNear } from "~~/lib/near-provider";
@@ -79,7 +79,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
               )}
               <span className="opacity-30 text-[10px] font-mono whitespace-nowrap">
                 {typeof post.created_at === "number" && post.created_at > 0
-                  ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true })
+                  ? timeAgo(post.created_at)
                   : `block ${post.block_height}`}
               </span>
             </div>

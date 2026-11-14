@@ -10,7 +10,7 @@
  * No keys are stored in this file; nothing runs on mainnet.
  */
 import { Account, JsonRpcProvider, actions, teraToGas } from "near-api-js";
-import { createRpc, parseUnits } from "./lib/near-rpc.mjs";
+import { createRpc, parseUnits, sumOutcomeFees, transactionHash } from "./lib/near-rpc.mjs";
 
 const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.fastnear.com";
 const NETWORK = (process.env.PHILIA_NETWORK ?? "testnet").trim().toLowerCase();
@@ -29,12 +29,6 @@ for (const name of ["ALICE_ACCOUNT", "ALICE_PRIVATE_KEY", "BOB_ACCOUNT", "TIP_FT
 if (/mainnet/i.test(RPC_URL) || process.env.ALICE_ACCOUNT.endsWith(".near")) fail("mainnet target refused");
 
 const rpc = createRpc(RPC_URL);
-
-function outcomeFee(outcome) {
-  const gas = BigInt(outcome?.gas_burnt ?? 0);
-  const tokens = BigInt(outcome?.tokens_burnt ?? 0);
-  return { gas, tokens };
-}
 
 const provider = new JsonRpcProvider({ url: RPC_URL });
 const account = new Account(process.env.ALICE_ACCOUNT, provider, process.env.ALICE_PRIVATE_KEY);
@@ -58,7 +52,7 @@ const settled = await account
     throwOnFailure: false,
   })
   .catch(error => error);
-const hash = settled?.transaction_outcome?.id ?? settled?.transaction?.hash ?? settled?.transactionHash;
+const hash = transactionHash(settled);
 if (!hash) fail(`no transaction hash: ${JSON.stringify(settled).slice(0, 300)}`);
 
 let final;
@@ -73,16 +67,7 @@ if (!status || typeof status !== "object" || !("SuccessValue" in status)) {
   fail(`tip failed: ${JSON.stringify(status).slice(0, 300)}`);
 }
 
-let gasBurnt = 0n;
-let tokensBurnt = 0n;
-for (const outcome of final.receipts_outcome ?? []) {
-  const fee = outcomeFee(outcome?.outcome);
-  gasBurnt += fee.gas;
-  tokensBurnt += fee.tokens;
-}
-const txFee = outcomeFee(final.transaction_outcome?.outcome);
-gasBurnt += txFee.gas;
-tokensBurnt += txFee.tokens;
+const { receipts, gas: gasBurnt, tokens: tokensBurnt } = sumOutcomeFees(final);
 
 const summary = {
   network: "testnet",
@@ -98,7 +83,7 @@ const summary = {
   tx_hash: hash,
   final_execution_status: final.final_execution_status,
   confirm_ms: Math.round(performance.now() - startedAt),
-  receipts: final.receipts_outcome?.length ?? 0,
+  receipts,
   gas_burnt: gasBurnt.toString(),
   tokens_burnt: tokensBurnt.toString(),
   tokens_burnt_near: (Number(tokensBurnt) / 1e24).toFixed(12),

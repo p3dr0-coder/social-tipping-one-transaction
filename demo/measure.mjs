@@ -22,6 +22,7 @@ import {
   describeError,
   failureReason as failureReasonOf,
   finalStatusName,
+  sumOutcomeFees,
   transactionHash,
 } from "./lib/near-rpc.mjs";
 
@@ -37,7 +38,7 @@ const KV_KEY_PREFIX = "post/";
 const INDEX_TIMEOUT_MS = 30_000;
 const INDEX_INTERVAL_MS = 1_000;
 const RPC_URL = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.fastnear.com";
-
+const ENCODER = new TextEncoder();
 function fail(message) {
   console.error(`measure: ${message}`);
   process.exit(1);
@@ -163,7 +164,7 @@ function reportFailure(sample, stage, message) {
 for (let index = 0; index < POST_COUNT; index += 1) {
   const text = `sample ${index + 1}: ${"x".repeat(TEXT_BYTES)}`;
   const key = `post/${Date.now()}${String(index).padStart(2, "0")}`;
-  const encoded = new TextEncoder().encode(text);
+  const encoded = ENCODER.encode(text);
 
   const sample = {
     index: index + 1,
@@ -249,19 +250,10 @@ for (let index = 0; index < POST_COUNT; index += 1) {
   sample.failure_reason = failureReason;
 
   try {
-    const receipts = Array.isArray(final?.receipts_outcome) ? final.receipts_outcome : [];
-    const receiptGas = receipts.reduce((sum, receipt) => sum + Number(receipt?.outcome?.gas_burnt ?? 0), 0);
-    const receiptTokens = receipts.reduce(
-      (sum, receipt) => sum + BigInt(receipt?.outcome?.tokens_burnt ?? "0"),
-      0n,
-    );
-    // `tx_status` reports the transaction fee as `transaction_outcome.outcome`; the
-    // `outcomes_agg.transaction_fee` shape is accepted as a fallback for RPC deployments
-    // that aggregate it. Never add both, or the signature fee is counted twice.
-    const fee = final?.transaction_outcome?.outcome ?? final?.outcomes_agg?.transaction_fee ?? {};
-    sample.receipts = receipts.length;
-    sample.gas_burnt = receiptGas + Number(fee?.gas_burnt ?? 0);
-    sample.tokens_burnt = (receiptTokens + BigInt(fee?.tokens_burnt ?? "0")).toString();
+    const fees = sumOutcomeFees(final);
+    sample.receipts = fees.receipts;
+    sample.gas_burnt = Number(fees.gas);
+    sample.tokens_burnt = fees.tokens.toString();
   } catch (error) {
     reportFailure(sample, "accounting", error.message);
     continue;

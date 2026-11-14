@@ -379,49 +379,12 @@ async function runTestnet() {
   const token = await view(philiaContract, "get_tip_token", {});
   const decimals = Array.isArray(token) ? token[1] : Number(token?.decimals);
   const metadata = await view(tipFt, "ft_metadata", {});
-  const amount = parseUnits("0.1", Number(decimals ?? metadata.decimals));
-  console.log(`  tip token ${tipFt} (${decimals ?? metadata.decimals} decimals), amount ${amount} base units`);
-
-  const registration = await view(tipFt, "storage_balance_of", { account_id: bob });
-  if (registration === null) {
-    const bounds = await view(tipFt, "storage_balance_bounds", {});
-    console.log(`  registering ${bob} with ${bounds.min} yocto`);
-    await send(tipFt, [functionCall("storage_deposit", { account_id: bob }, GAS_30_TGAS, BigInt(bounds.min))]);
-  }
-
-  await send(tipFt, [
-    functionCall(
-      "ft_transfer",
-      { receiver_id: bob, amount: amount.toString(), memo: "tip via philia" },
-      GAS_30_TGAS,
-      1n,
-    ),
-  ]);
-
-  const bobBalance = await view(tipFt, "ft_balance_of", { account_id: bob });
-  const bobPreference = await view(philiaContract, "get_tip_preference", { account_id: bob });
-  console.log(`  bob balance: ${bobBalance}`);
-  console.log(`  bob tip preference: ${bobPreference}`);
+  await sendTipTransfer(Number(decimals ?? metadata.decimals));
 
   console.log("done: a post indexed + a tip settled");
 }
 
-async function mainnetTip() {
-  console.log("  mainnet tip: this sends real funds");
-  const token = await view(philiaContract, "get_tip_token", {});
-  if (!Array.isArray(token) || token.length < 2) {
-    throw new Error(`get_tip_token on ${philiaContract} returned ${JSON.stringify(token)}; expected [account_id, decimals]`);
-  }
-  const [tokenId, tokenDecimals] = token;
-  if (tokenId !== tipFt) {
-    throw new Error(`PHILIA_CONTRACT prices tips in ${tokenId}, but TIP_FT is ${tipFt}; set TIP_FT to the contract's token`);
-  }
-  const decimals = Number(tokenDecimals);
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 24) {
-    throw new Error(
-      `get_tip_token on ${philiaContract} returned decimals ${JSON.stringify(tokenDecimals)}; expected an integer between 0 and 24`,
-    );
-  }
+async function sendTipTransfer(decimals) {
   const amount = parseUnits("0.1", decimals);
   console.log(`  tip token ${tipFt} (${decimals} decimals), amount ${amount} base units`);
 
@@ -445,6 +408,25 @@ async function mainnetTip() {
   const bobPreference = await view(philiaContract, "get_tip_preference", { account_id: bob });
   console.log(`  bob balance: ${bobBalance}`);
   console.log(`  bob tip preference: ${bobPreference}`);
+}
+
+async function mainnetTip() {
+  console.log("  mainnet tip: this sends real funds");
+  const token = await view(philiaContract, "get_tip_token", {});
+  if (!Array.isArray(token) || token.length < 2) {
+    throw new Error(`get_tip_token on ${philiaContract} returned ${JSON.stringify(token)}; expected [account_id, decimals]`);
+  }
+  const [tokenId, tokenDecimals] = token;
+  if (tokenId !== tipFt) {
+    throw new Error(`PHILIA_CONTRACT prices tips in ${tokenId}, but TIP_FT is ${tipFt}; set TIP_FT to the contract's token`);
+  }
+  const decimals = Number(tokenDecimals);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 24) {
+    throw new Error(
+      `get_tip_token on ${philiaContract} returned decimals ${JSON.stringify(tokenDecimals)}; expected an integer between 0 and 24`,
+    );
+  }
+  await sendTipTransfer(decimals);
 }
 
 async function runMainnet() {

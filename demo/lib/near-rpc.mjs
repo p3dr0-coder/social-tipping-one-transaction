@@ -103,3 +103,18 @@ export function parseUnits(amount, decimals) {
   if (units <= 0n) throw new Error("amount must be greater than zero");
   return units;
 }
+
+/** Sums burnt gas and tokens across all receipts plus the transaction signature outcome. */
+export function sumOutcomeFees(final) {
+  const receipts = Array.isArray(final?.receipts_outcome) ? final.receipts_outcome : [];
+  let gas = 0n;
+  let tokens = 0n;
+  for (const entry of receipts) {
+    gas += BigInt(entry?.outcome?.gas_burnt ?? 0);
+    tokens += BigInt(entry?.outcome?.tokens_burnt ?? 0);
+  }
+  const txFee = final?.transaction_outcome?.outcome ?? final?.outcomes_agg?.transaction_fee ?? {};
+  gas += BigInt(txFee?.gas_burnt ?? 0);
+  tokens += BigInt(txFee?.tokens_burnt ?? 0);
+  return { receipts: receipts.length, gas, tokens };
+}

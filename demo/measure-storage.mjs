@@ -20,6 +20,7 @@ import {
   describeError,
   failureReason as failureReasonOf,
   finalStatusName,
+  sumOutcomeFees,
   transactionHash,
 } from "./lib/near-rpc.mjs";
 
@@ -204,24 +205,16 @@ async function submit(methodName, args, deposit) {
     throw new Error(`tx ${txHash} failed: ${failureReason}`);
   }
 
-  const outcomes = Array.isArray(final?.receipts_outcome) ? final.receipts_outcome : [];
-  const receiptGas = outcomes.reduce((sum, receipt) => sum + Number(receipt?.outcome?.gas_burnt ?? 0), 0);
-  const receiptTokens = outcomes.reduce(
-    (sum, receipt) => sum + BigInt(receipt?.outcome?.tokens_burnt ?? "0"),
-    0n,
-  );
-  // `transaction_outcome.outcome` is the signature fee; `outcomes_agg.transaction_fee` is the
-  // fallback for RPC deployments that aggregate it. Never add both.
-  const fee = final?.transaction_outcome?.outcome ?? final?.outcomes_agg?.transaction_fee ?? {};
+  const fees = sumOutcomeFees(final);
 
   return {
     tx_hash: txHash,
     confirm_ms: confirmMs,
     final_execution_status: finalExecutionStatus,
     final_status: finalStatus,
-    receipts: outcomes.length,
-    gas_burnt: receiptGas + Number(fee?.gas_burnt ?? 0),
-    tokens_burnt: (receiptTokens + BigInt(fee?.tokens_burnt ?? "0")).toString(),
+    receipts: fees.receipts,
+    gas_burnt: Number(fees.gas),
+    tokens_burnt: fees.tokens.toString(),
     transfer_receipts: transferReceiptsTo(final, signer),
   };
 }

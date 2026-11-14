@@ -272,3 +272,7 @@ npx skills add near/agent-skills \
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## Hackathon
+
+Track: `social`. Development ends 2026-11-14T23:59:00Z (UTC).

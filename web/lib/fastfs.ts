@@ -1,7 +1,8 @@
 import { teraToGas } from "near-api-js";
 import { encodeHex } from "./bytes";
 import { nearConfig } from "~~/near.config";
-import { confirmTx, extractTxHash, type WalletConnection } from "./social";
+import { confirmTx, type WalletConnection } from "./social";
+import { extractTxHash } from "./tx";
 
 import {
   CHUNK_BYTES,
@@ -9,8 +10,8 @@ import {
   MAX_MEDIA_BYTES,
   assertMimeType,
   assertRelativePath,
-  encodePartialFastfsPayload as partialFastfsPayload,
-  encodeSimpleFastfsPayload as simpleFastfsPayload,
+  encodePartialFastfs as partialFastfsPayload,
+  encodeSimpleFastfs as simpleFastfsPayload,
 } from "./fastfs-codec";
 import { delay } from "./shared.ts";
 
@@ -18,9 +19,10 @@ const POLL_MS = 1_500;
 const TIMEOUT_MS = 30_000;
 
 async function sha256Hex(content: Uint8Array): Promise<string> {
-  // WebCrypto accepts any ArrayBufferView; TS 7 types the generic buffer as
-  // ArrayBufferLike, which is not a BufferSource at the type level.
-  const bytes: BufferSource = content as BufferSource;
+  const bytes: Uint8Array<ArrayBuffer> =
+    content.buffer instanceof ArrayBuffer
+      ? new Uint8Array(content.buffer, content.byteOffset, content.byteLength)
+      : new Uint8Array(content);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return encodeHex(new Uint8Array(digest));
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronUpIcon } from "@heroicons/react/24/outline";
 
-export const ScrollToTop = () => {
+export const ScrollTop = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {

@@ -11,57 +11,84 @@ export const Feed = () => {
   const { accountId } = useNear();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loadedKey, setLoadedKey] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeKey = accountId ?? "";
+  const loading = loadedKey !== activeKey;
 
   const cursorRef = useRef<string | null>(null);
   const requestRef = useRef(0);
 
-  const load = useCallback(async (mode: LoadMode) => {
-    const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    if (mode === "initial") setLoading(true);
-    if (mode === "refresh") setRefreshing(true);
-    if (mode === "more") setLoadingMore(true);
+  const load = useCallback(
+    async (mode: LoadMode) => {
+      const requestId = requestRef.current + 1;
+      requestRef.current = requestId;
+      if (mode === "refresh") setRefreshing(true);
+      if (mode === "more") setLoadingMore(true);
 
-    try {
-      const page = await fetchGlobalFeed(
-        mode === "more" ? (cursorRef.current ?? undefined) : undefined,
-        undefined,
-        accountId ?? undefined,
-      );
-      if (requestRef.current !== requestId) return;
+      try {
+        const page = await fetchGlobalFeed(
+          mode === "more" ? (cursorRef.current ?? undefined) : undefined,
+          undefined,
+          accountId ?? undefined,
+        );
+        if (requestRef.current !== requestId) return;
 
-      cursorRef.current = page.next_cursor;
-      setHasMore(page.next_cursor !== null);
-      setItems(previous => {
-        const merged = mode === "more" ? [...previous, ...page.items] : page.items;
-        const seen = new Set<string>();
-        return merged.filter(item => {
-          if (seen.has(item.post.key)) return false;
-          seen.add(item.post.key);
-          return true;
+        cursorRef.current = page.next_cursor;
+        setHasMore(page.next_cursor !== null);
+        setItems(previous => {
+          const merged = mode === "more" ? [...previous, ...page.items] : page.items;
+          const seen = new Set<string>();
+          return merged.filter(item => {
+            if (seen.has(item.post.key)) return false;
+            seen.add(item.post.key);
+            return true;
+          });
         });
-      });
-      setError(null);
-    } catch (cause) {
-      if (requestRef.current === requestId) {
-        setError(cause instanceof Error ? cause.message : "The feed could not be loaded");
+        setError(null);
+      } catch (cause) {
+        if (requestRef.current === requestId) {
+          setError(cause instanceof Error ? cause.message : "The feed could not be loaded");
+        }
+      } finally {
+        if (requestRef.current === requestId) {
+          setLoadedKey(activeKey);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
-    } finally {
-      if (requestRef.current === requestId) {
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
-      }
-    }
-  }, [accountId]);
+    },
+    [accountId, activeKey],
+  );
 
   useEffect(() => {
-    void load("initial");
-  }, [load]);
+    let cancelled = false;
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    fetchGlobalFeed(undefined, undefined, accountId ?? undefined)
+      .then(page => {
+        if (cancelled || requestRef.current !== requestId) return;
+        cursorRef.current = page.next_cursor;
+        setHasMore(page.next_cursor !== null);
+        setItems(page.items);
+        setError(null);
+      })
+      .catch(cause => {
+        if (!cancelled && requestRef.current === requestId) {
+          setError(cause instanceof Error ? cause.message : "The feed could not be loaded");
+        }
+      })
+      .finally(() => {
+        if (!cancelled && requestRef.current === requestId) {
+          setLoadedKey(activeKey);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, activeKey]);
 
   useEffect(() => {
     const handlePostIndexed = () => {
@@ -116,7 +143,9 @@ export const Feed = () => {
           <div className="glass-panel p-16 text-center rounded-[2.5rem] border-dashed border-2 border-base-content/10">
             <div className="text-6xl mb-6 opacity-40">◌</div>
             <h3 className="text-2xl font-black mb-2">Nothing here yet</h3>
-            <p className="opacity-50 max-w-xs mx-auto">Write the first post and it will appear as soon as the indexer accepts it.</p>
+            <p className="opacity-50 max-w-xs mx-auto">
+              Write the first post and it will appear as soon as the indexer accepts it.
+            </p>
           </div>
         ) : (
           items.map(item => <CastCard key={item.post.key} post={item.post} repostedBy={item.reposted_by} />)

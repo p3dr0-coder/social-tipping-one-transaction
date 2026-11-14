@@ -6,9 +6,10 @@ import { timeAgo } from "~~/lib/time";
 import { Avatar } from "./Avatar";
 import { FollowButton } from "./FollowButton";
 import { useNear } from "~~/lib/near-provider";
-import { fetchAccount, reputationFor, type Post } from "~~/lib/social";
+import { fetchAccount, type Post } from "~~/lib/social";
+import { reputationFor } from "~~/lib/social-core";
 import { getDefaultTip } from "~~/lib/tips";
-import { useTipAuthor } from "~~/lib/use-tip-author";
+import { useTip } from "~~/lib/use-tip";
 
 type CastCardProps = {
   post: Post;
@@ -23,7 +24,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
   const authorId = post.author.account_id;
   const isSelf = accountId === authorId;
   const reputation = followers === null ? null : reputationFor(followers);
-  const { tipAuthor, tipping } = useTipAuthor({
+  const { tipAuthor, tipping } = useTip({
     authorId,
     viewerId: accountId,
     signAndSendTransaction,
@@ -48,9 +49,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
   return (
     <div className="glass-panel p-6 rounded-[1.5rem] transition-all duration-300 group relative overflow-hidden border border-base-content/5 hover:border-primary/30">
       {repostedBy && (
-        <div className="text-[10px] uppercase tracking-widest opacity-40 mb-3">
-          Repost by {repostedBy.account_id}
-        </div>
+        <div className="text-[10px] uppercase tracking-widest opacity-40 mb-3">Repost by {repostedBy.account_id}</div>
       )}
       <div className="flex gap-4 relative z-10">
         <div className="flex-shrink-0 pt-1">

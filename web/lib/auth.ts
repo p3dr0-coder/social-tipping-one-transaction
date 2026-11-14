@@ -53,7 +53,6 @@ export type VerifyAuthMessageArgs = {
   signature: string | Uint8Array;
 };
 
-
 function decodeBase64(value: string): Uint8Array {
   const bytes = decodeBase64Strict(value);
   if (bytes.byteLength === 0) throw new Error("the wallet returned an empty signature");

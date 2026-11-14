@@ -22,15 +22,15 @@ export default function ProfilePage() {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [tipPreference, setTipPreference] = useState("0.1");
   const [token, setToken] = useState<TipToken | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingTip, setSavingTip] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const loading = Boolean(accountId) && loadedFor !== accountId;
 
   useEffect(() => {
     if (!accountId) return;
     let cancelled = false;
-    setLoading(true);
     Promise.all([fetchAccount(accountId), getTipPreference(accountId), getTipToken()])
       .then(([profile, preference, tipToken]) => {
         if (cancelled) return;
@@ -46,7 +46,7 @@ export default function ProfilePage() {
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadedFor(accountId);
       });
     return () => {
       cancelled = true;
@@ -235,7 +235,11 @@ export default function ProfilePage() {
                       Avatar
                     </label>
                     <div className="flex items-center gap-4">
-                      <Avatar accountId={accountId ?? "unknown"} avatar={avatar} className="w-16 h-16 border border-white/10" />
+                      <Avatar
+                        accountId={accountId ?? "unknown"}
+                        avatar={avatar}
+                        className="w-16 h-16 border border-white/10"
+                      />
                       <label className="btn btn-outline btn-sm rounded-full cursor-pointer">
                         {uploading ? "Uploading..." : "Choose image"}
                         <input
@@ -264,9 +268,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="flex flex-col gap-3 mb-12">
-                  <label className="text-[10px] uppercase tracking-[0.2em] font-black text-primary px-2">
-                    Bio
-                  </label>
+                  <label className="text-[10px] uppercase tracking-[0.2em] font-black text-primary px-2">Bio</label>
                   <textarea
                     value={about}
                     onChange={event => setAbout(event.target.value)}

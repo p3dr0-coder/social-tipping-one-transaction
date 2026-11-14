@@ -4,32 +4,32 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "./Avatar";
-import { isValidAccountId, searchAccounts, type AccountCard } from "~~/lib/social";
+import { searchAccounts, type AccountCard } from "~~/lib/social";
+import { isValidAccountId } from "~~/lib/social-core";
 
 export const SearchUsers = () => {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<AccountCard[]>([]);
+  const [searchState, setSearchState] = useState<{ query: string; items: AccountCard[] }>({ query: "", items: [] });
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  const trimmed = query.trim();
+  const results = trimmed.length >= 2 && searchState.query === trimmed ? searchState.items : [];
+
   useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setResults([]);
-      return;
-    }
+    if (trimmed.length < 2) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
       searchAccounts(trimmed)
         .then(items => {
           if (cancelled) return;
-          setResults(items.slice(0, 5));
+          setSearchState({ query: trimmed, items: items.slice(0, 5) });
           setIsOpen(true);
         })
         .catch(() => {
-          if (!cancelled) setResults([]);
+          if (!cancelled) setSearchState({ query: trimmed, items: [] });
         });
     }, 250);
 
@@ -37,7 +37,7 @@ export const SearchUsers = () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [trimmed]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

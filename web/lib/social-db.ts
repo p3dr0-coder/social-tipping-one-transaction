@@ -31,9 +31,6 @@ const SOCIALDB_WRITE_GAS = teraToGas("100").toString();
 // `storage_balance_bounds.min` on v1.social08.testnet is 0.02 NEAR; 0.05 leaves headroom.
 const SOCIALDB_STORAGE_DEPOSIT = "50000000000000000000000";
 
-
-
-
 /**
  * Sends one `set` call to the SocialDB contract on behalf of the connected wallet.
  * `data` is the account's own subtree; this function nests it under the signer exactly once.
@@ -119,7 +116,6 @@ export async function follow(wallet: WalletConnection, target: string, on: boole
   if (accountId === wallet.accountId) throw new Error("you cannot follow yourself");
   return testnetSet(socialDbFollowData(accountId, on), wallet);
 }
-
 
 async function loadMainPost(accountId: string): Promise<{ text: string } | null> {
   const data = await getTestnetSocial().get({ keys: [mainPostKey(accountId)], useApiServer: false });

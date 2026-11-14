@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "./Avatar";
-import { FollowListModal } from "./FollowListModal";
+import { FollowModal } from "./FollowModal";
 import { SearchUsers } from "./SearchUsers";
 import { useNear } from "~~/lib/near-provider";
 import { fetchAccount, type AccountProfile } from "~~/lib/social";
@@ -11,27 +12,24 @@ import { notification } from "~~/utils/notification";
 
 export const Sidebar = () => {
   const { accountId } = useNear();
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [profileState, setProfileState] = useState<{ accountId: string; profile: AccountProfile | null } | null>(null);
   const [modalType, setModalType] = useState<"followers" | "following" | null>(null);
+  const profile = accountId && profileState?.accountId === accountId ? profileState.profile : null;
 
   useEffect(() => {
-    if (!accountId) {
-      setProfile(null);
-      return;
-    }
+    if (!accountId) return;
     let cancelled = false;
     fetchAccount(accountId)
       .then(next => {
-        if (!cancelled) setProfile(next);
+        if (!cancelled) setProfileState({ accountId, profile: next });
       })
       .catch(() => {
-        if (!cancelled) setProfile(null);
+        if (!cancelled) setProfileState({ accountId, profile: null });
       });
     return () => {
       cancelled = true;
     };
   }, [accountId]);
-
   return (
     <div className="flex flex-col gap-6 sticky top-24">
       <SearchUsers />
@@ -43,17 +41,16 @@ export const Sidebar = () => {
           <div className="relative mb-4">
             <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl group-hover:bg-primary/40 transition-all duration-500"></div>
             <div className="w-24 h-24 rounded-full border-2 border-base-content/20 shadow-2xl relative z-10 overflow-hidden group-hover:scale-105 transition-transform duration-300">
-              <Avatar
-                accountId={accountId ?? "unknown"}
-                avatar={profile?.avatar}
-                className="w-24 h-24"
-              />
+              <Avatar accountId={accountId ?? "unknown"} avatar={profile?.avatar} className="w-24 h-24" />
             </div>
           </div>
 
           <div className="w-full">
             <div className="flex items-center justify-center gap-2 mb-3">
-              <h2 className="font-bold text-xl truncate text-primary/90 max-w-[200px]" title={accountId ?? "Not connected"}>
+              <h2
+                className="font-bold text-xl truncate text-primary/90 max-w-[200px]"
+                title={accountId ?? "Not connected"}
+              >
                 {profile?.name ?? accountId ?? "Not connected"}
               </h2>
               {accountId && (
@@ -65,20 +62,7 @@ export const Sidebar = () => {
                   className="btn btn-ghost btn-xs btn-circle text-primary hover:bg-primary/10 transition-all opacity-50 hover:opacity-100"
                   title="Copy account id"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5"
-                    />
-                  </svg>
+                  <ClipboardDocumentIcon className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -118,7 +102,7 @@ export const Sidebar = () => {
       </div>
 
       {accountId && modalType && (
-        <FollowListModal
+        <FollowModal
           isOpen
           onClose={() => setModalType(null)}
           title={modalType === "followers" ? "Followers" : "Following"}
@@ -145,9 +129,7 @@ export const Sidebar = () => {
           </Link>
         ))}
       </nav>
-      <div className="text-center text-[10px] opacity-20 font-mono tracking-widest">
-        philia · near.social social DB
-      </div>
+      <div className="text-center text-[10px] opacity-20 font-mono tracking-widest">philia · near.social social DB</div>
     </div>
   );
 };

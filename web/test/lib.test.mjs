@@ -12,14 +12,12 @@ import {
   fastDataPrefixBody,
   fastDataPrefixUrl,
 } from "../lib/fastdata-core.ts";
-import {
-  CHUNK_BYTES,
-  MAX_MEDIA_BYTES,
-  encodePartialFastfsPayload,
-  encodeSimpleFastfsPayload,
-} from "../lib/fastfs-codec.ts";
+import { CHUNK_BYTES, MAX_MEDIA_BYTES, encodePartialFastfs, encodeSimpleFastfs } from "../lib/fastfs-codec.ts";
 import { mainPostKey, parseMainPost, collectMainPosts } from "../lib/main-posts.ts";
+import { toError } from "../lib/shared.ts";
+import { QUOTAS, assertWriteBudget, isNamedAccountId, isValidAccountId, reputationFor } from "../lib/social-core.ts";
 import { timeAgo } from "../lib/time.ts";
+import { extractTxHash } from "../lib/tx.ts";
 
 test("base64 round-trips and rejects bad input", () => {
   const bytes = new Uint8Array([0, 1, 2, 250, 251, 255]);
@@ -108,18 +106,30 @@ function simpleReference(path, mime, content) {
   const pathBytes = text(path);
   const mimeBytes = text(mime);
   return reference([
-    new Uint8Array([0x00]), u32(pathBytes.length), pathBytes,
-    new Uint8Array([0x01]), u32(mimeBytes.length), mimeBytes,
-    u32(content.length), content,
+    new Uint8Array([0x00]),
+    u32(pathBytes.length),
+    pathBytes,
+    new Uint8Array([0x01]),
+    u32(mimeBytes.length),
+    mimeBytes,
+    u32(content.length),
+    content,
   ]);
 }
 function partialReference(path, mime, chunk, offset, fullSize, nonce) {
   const pathBytes = text(path);
   const mimeBytes = text(mime);
   return reference([
-    new Uint8Array([0x01]), u32(pathBytes.length), pathBytes,
-    u32(offset), u32(fullSize), u32(mimeBytes.length), mimeBytes,
-    u32(chunk.length), chunk, u32(nonce),
+    new Uint8Array([0x01]),
+    u32(pathBytes.length),
+    pathBytes,
+    u32(offset),
+    u32(fullSize),
+    u32(mimeBytes.length),
+    mimeBytes,
+    u32(chunk.length),
+    chunk,
+    u32(nonce),
   ]);
 }
 
@@ -127,21 +137,21 @@ test("Simple codec is byte-equal to the reference encoder", () => {
   const content = new Uint8Array(4096);
   for (let index = 0; index < content.length; index += 1) content[index] = index & 0xff;
   assert.deepEqual(
-    encodeSimpleFastfsPayload("media/avatar.webp", "image/webp", content),
+    encodeSimpleFastfs("media/avatar.webp", "image/webp", content),
     simpleReference("media/avatar.webp", "image/webp", content),
   );
 });
 
 test("Simple codec handles empty and 1 MiB content", () => {
   assert.deepEqual(
-    encodeSimpleFastfsPayload("a", "text/plain", new Uint8Array()),
+    encodeSimpleFastfs("a", "text/plain", new Uint8Array()),
     simpleReference("a", "text/plain", new Uint8Array()),
   );
   const content = new Uint8Array(1024 * 1024);
   content[0] = 0xaa;
   content[content.length - 1] = 0x55;
   assert.deepEqual(
-    encodeSimpleFastfsPayload("media/video.mp4", "video/mp4", content),
+    encodeSimpleFastfs("media/video.mp4", "video/mp4", content),
     simpleReference("media/video.mp4", "video/mp4", content),
   );
 });
@@ -151,19 +161,16 @@ test("Partial codec is byte-equal to the reference encoder", () => {
   chunk[0] = 1;
   chunk[chunk.length - 1] = 2;
   assert.deepEqual(
-    encodePartialFastfsPayload("media/video.mp4", "video/mp4", chunk, CHUNK_BYTES, MAX_MEDIA_BYTES, 42),
+    encodePartialFastfs("media/video.mp4", "video/mp4", chunk, CHUNK_BYTES, MAX_MEDIA_BYTES, 42),
     partialReference("media/video.mp4", "video/mp4", chunk, CHUNK_BYTES, MAX_MEDIA_BYTES, 42),
   );
 });
 
 test("codec preserves the existing validation errors", () => {
-  assert.throws(
-    () => encodeSimpleFastfsPayload("../x", "text/plain", new Uint8Array()),
-    /not a valid FastFS relative path/,
-  );
-  assert.throws(() => encodeSimpleFastfsPayload("x", "", new Uint8Array()), /mime type/);
-  assert.throws(() => encodePartialFastfsPayload("x", "text/plain", new Uint8Array(1), 1, 2, 1), /1 MiB-aligned/);
-  assert.throws(() => encodePartialFastfsPayload("x", "text/plain", new Uint8Array(1), 0, 10, 0), /nonce must be/);
+  assert.throws(() => encodeSimpleFastfs("../x", "text/plain", new Uint8Array()), /not a valid FastFS relative path/);
+  assert.throws(() => encodeSimpleFastfs("x", "", new Uint8Array()), /mime type/);
+  assert.throws(() => encodePartialFastfs("x", "text/plain", new Uint8Array(1), 1, 2, 1), /1 MiB-aligned/);
+  assert.throws(() => encodePartialFastfs("x", "text/plain", new Uint8Array(1), 0, 10, 0), /nonce must be/);
 });
 
 function oldLoadMainPost(data, author) {
@@ -194,7 +201,13 @@ test("batched collectMainPosts is oracle-equal to N per-author reads (mixed shap
   };
   const expected = oldBehavior(data, authors);
   assert.deepEqual([...collectMainPosts(data, authors)], [...expected]);
-  assert.deepEqual([...collectMainPosts(data, authors)], [["a.near", "hello"], ["b.near", "raw object"]]);
+  assert.deepEqual(
+    [...collectMainPosts(data, authors)],
+    [
+      ["a.near", "hello"],
+      ["b.near", "raw object"],
+    ],
+  );
 });
 
 test("mainPostKey and parseMainPost cover the edge cases", () => {
@@ -242,4 +255,46 @@ test("timeAgo picks the correct unit (second/minute/hour/day)", () => {
   assert.match(timeAgo(now - 600_000, now), /minute/);
   assert.match(timeAgo(now - 10_800_000, now), /hour/);
   assert.match(timeAgo(now - 259_200_000, now), /day|yesterday/);
+});
+
+test("extractTxHash extracts hashes from wallet, RPC, and nested failure shapes", () => {
+  assert.equal(extractTxHash({ transaction: { hash: "h1" } }), "h1");
+  assert.equal(extractTxHash({ transaction_outcome: { id: "h2" } }), "h2");
+  assert.equal(extractTxHash({ context: { transactionHash: "h3" } }), "h3");
+  assert.equal(extractTxHash({ transactionResult: { result: { transaction: { hash: "h4" } } } }), "h4");
+  assert.equal(extractTxHash({}), null);
+  assert.equal(extractTxHash(null), null);
+});
+
+test("toError normalizes Error, string, object, and circular payloads", () => {
+  const orig = new Error("boom");
+  assert.equal(toError(orig), orig);
+  assert.equal(toError("bad").message, "bad");
+  assert.equal(toError({ code: 400 }).message, '{"code":400}');
+  const circular = {};
+  circular.self = circular;
+  assert.match(toError(circular).message, /unreadable error/);
+});
+
+test("assertWriteBudget enforces key, value, count, and UTF-8 tx byte limits", () => {
+  assert.doesNotThrow(() => assertWriteBudget({ "post/1": { text: "hi 🚀" }, skipped: undefined }));
+  assert.throws(() => assertWriteBudget({ ["k".repeat(QUOTAS.keyBytes + 1)]: 1 }), /exceeds 1024 bytes/);
+  assert.throws(() => assertWriteBudget({ "post/1": "x".repeat(QUOTAS.valueBytes) }), /exceeds 262144 bytes/);
+  const manyKeys = Object.fromEntries(Array.from({ length: QUOTAS.keysPerTx + 1 }, (_, i) => [`k${i}`, 1]));
+  assert.throws(() => assertWriteBudget(manyKeys), /at most 256 keys/);
+  const oversized = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`p${i}`, "x".repeat(250_000)]));
+  assert.throws(() => assertWriteBudget(oversized), /at most 1572864/);
+});
+
+test("account id validation and reputation tiers match NEAR/indexer rules", () => {
+  assert.equal(isValidAccountId("alice.testnet"), true);
+  assert.equal(isNamedAccountId("alice.testnet"), true);
+  const implicit = "a".repeat(64);
+  assert.equal(isValidAccountId(implicit), true);
+  assert.equal(isNamedAccountId(implicit), false);
+  assert.equal(isValidAccountId("A"), false);
+  assert.equal(reputationFor(9), null);
+  assert.equal(reputationFor(10)?.label, "Contributor");
+  assert.equal(reputationFor(100)?.label, "Steward");
+  assert.equal(reputationFor(1_000)?.label, "Luminary");
 });

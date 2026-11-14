@@ -9,35 +9,34 @@ import { fetchSuggestions, type AccountCard } from "~~/lib/social";
 
 export const Suggestions = () => {
   const { accountId } = useNear();
-  const [users, setUsers] = useState<AccountCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<{ accountId: string; users: AccountCard[]; error: string | null } | null>(null);
+
+  const loading = Boolean(accountId) && state?.accountId !== accountId;
+  const users = accountId && state?.accountId === accountId ? state.users : [];
+  const error = accountId && state?.accountId === accountId ? state.error : null;
 
   useEffect(() => {
-    if (!accountId) {
-      setLoading(false);
-      return;
-    }
+    if (!accountId) return;
     let cancelled = false;
-    setLoading(true);
     fetchSuggestions(accountId)
       .then(items => {
         if (!cancelled) {
-          setUsers(items.slice(0, 8));
-          setError(null);
+          setState({ accountId, users: items.slice(0, 8), error: null });
         }
       })
       .catch(cause => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Suggestions are unavailable");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setState({
+            accountId,
+            users: [],
+            error: cause instanceof Error ? cause.message : "Suggestions are unavailable",
+          });
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [accountId]);
-
   if (loading) {
     return (
       <div className="glass-panel p-6 rounded-[2rem] border border-white/5 flex flex-col gap-4 animate-pulse">

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon, ClipboardDocumentIcon, PowerIcon } from "@heroicons/react/24/outline";
 import { useNear } from "~~/lib/near-provider";
-import { isNamedAccountId } from "~~/lib/social";
+import { isNamedAccountId } from "~~/lib/social-core";
 import { notification } from "~~/utils/notification";
 
 type HeaderMenuLink = {

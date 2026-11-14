@@ -1,7 +1,7 @@
 "use client";
 
 import { useNear } from "~~/lib/near-provider";
-import { isNamedAccountId } from "~~/lib/social";
+import { isNamedAccountId } from "~~/lib/social-core";
 import { LandingPage } from "./LandingPage";
 
 /**

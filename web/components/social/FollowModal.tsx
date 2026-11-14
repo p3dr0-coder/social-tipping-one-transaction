@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "./Avatar";
 import { fetchFollowers, fetchFollowing, type AccountCard } from "~~/lib/social";
 
-type FollowListModalProps = {
+type FollowModalProps = {
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -15,17 +15,27 @@ type FollowListModalProps = {
   kind: "followers" | "following";
 };
 
-export const FollowListModal = ({ isOpen, onClose, title, accountId, kind }: FollowListModalProps) => {
-  const [mounted, setMounted] = useState(false);
-  const [items, setItems] = useState<AccountCard[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const subscribeNoop = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export const FollowModal = ({ isOpen, onClose, title, accountId, kind }: FollowModalProps) => {
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+  const [state, setState] = useState<{
+    key: string;
+    items: AccountCard[];
+    cursor: string | null;
+    error: string | null;
+  } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchKey = isOpen ? `${kind}:${accountId}` : null;
+  const loading = Boolean(fetchKey) && state?.key !== fetchKey;
+  const items = fetchKey && state?.key === fetchKey ? state.items : [];
+  const cursor = fetchKey && state?.key === fetchKey ? state.cursor : null;
+  const error = fetchKey && state?.key === fetchKey ? state.error : null;
 
   useEffect(() => {
     if (!isOpen) {
@@ -39,42 +49,46 @@ export const FollowListModal = ({ isOpen, onClose, title, accountId, kind }: Fol
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!fetchKey) return;
     let cancelled = false;
-    setLoading(true);
-    setItems([]);
-    setCursor(null);
-    setError(null);
-
     const load = kind === "followers" ? fetchFollowers : fetchFollowing;
     load(accountId)
       .then(page => {
-        if (cancelled) return;
-        setItems(page.items);
-        setCursor(page.next_cursor);
+        if (!cancelled) setState({ key: fetchKey, items: page.items, cursor: page.next_cursor, error: null });
       })
       .catch(cause => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "The list could not be loaded");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setState({
+            key: fetchKey,
+            items: [],
+            cursor: null,
+            error: cause instanceof Error ? cause.message : "The list could not be loaded",
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, accountId, kind]);
+  }, [fetchKey, accountId, kind]);
 
   const loadMore = async () => {
-    if (!cursor) return;
+    if (!cursor || !fetchKey) return;
     setLoadingMore(true);
     try {
       const load = kind === "followers" ? fetchFollowers : fetchFollowing;
       const page = await load(accountId, cursor);
-      setItems(previous => [...previous, ...page.items]);
-      setCursor(page.next_cursor);
+      setState(previous =>
+        previous && previous.key === fetchKey
+          ? { ...previous, items: [...previous.items, ...page.items], cursor: page.next_cursor }
+          : previous,
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The next page could not be loaded");
+      setState(previous =>
+        previous && previous.key === fetchKey
+          ? { ...previous, error: cause instanceof Error ? cause.message : "The next page could not be loaded" }
+          : previous,
+      );
     } finally {
       setLoadingMore(false);
     }

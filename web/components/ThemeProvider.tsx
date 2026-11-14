@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 
@@ -10,28 +10,45 @@ type ThemeContextValue = {
 };
 
 const STORAGE_KEY = "philia-theme";
+const THEME_EVENT = "philia-theme-change";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+function subscribeTheme(callback: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === STORAGE_KEY) callback();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(THEME_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(THEME_EVENT, callback);
+  };
+}
+
+function readTheme(): Theme {
+  return window.localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+}
+
+function serverTheme(): Theme {
+  return "light";
+}
+
 /**
  * daisyUI themes are selected by `data-theme` on the document element, so the provider
- * writes that attribute and remembers the choice locally. No server round-trip is needed,
- * and the first paint uses the light theme until the effect reads the stored value.
+ * reads localStorage via useSyncExternalStore and syncs `data-theme` without extra renders.
  */
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    const initial: Theme = stored === "dark" ? "dark" : "light";
-    setThemeState(initial);
-    document.documentElement.dataset.theme = initial;
-  }, []);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
-    document.documentElement.dataset.theme = next;
     window.localStorage.setItem(STORAGE_KEY, next);
+    document.documentElement.dataset.theme = next;
+    window.dispatchEvent(new Event(THEME_EVENT));
   }, []);
 
   const value = useMemo<ThemeContextValue>(() => ({ theme, setTheme }), [theme, setTheme]);

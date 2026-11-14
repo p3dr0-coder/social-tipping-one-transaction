@@ -1,24 +1,7 @@
-// `Uint8Array.prototype.toBase64/toHex` and the static `fromBase64/fromHex` are in the
-// current lib but TS 5.8 ships without them, so declare the surface this module uses.
-declare global {
-  interface Uint8Array {
-    toBase64(options?: { alphabet?: "base64" | "base64url"; omitPadding?: boolean }): string;
-    toHex(): string;
-  }
-  interface Uint8ArrayConstructor {
-    fromBase64(
-      value: string,
-      options?: { alphabet?: "base64" | "base64url"; lastChunkHandling?: "loose" | "strict" | "stop-before-partial" },
-    ): Uint8Array;
-    fromHex(value: string): Uint8Array;
-  }
-}
-
 /**
- * Native byte codecs. `Uint8Array.prototype.toBase64`/`toHex` and the static
- * `fromBase64`/`fromHex` are Baseline (Chrome 140+, Firefox 133+, Safari 18.2+) and ship in
- * Node.js 25+; the project engines floor is Node 22.22.2, so every helper feature-detects
- * and falls back to `atob`/manual hex.
+ * Native byte codecs. `Uint8Array.prototype.toBase64`/`toHex` and `Uint8Array.fromBase64`/
+ * `fromHex` are Baseline (Chrome 140+, Firefox 133+, Safari 18.2+, Node 25+) and typed in
+ * TypeScript 7 (`lib: ["esnext"]`). Helpers feature-detect with `atob`/hex fallbacks.
  */
 
 function hexByte(value: number): string {

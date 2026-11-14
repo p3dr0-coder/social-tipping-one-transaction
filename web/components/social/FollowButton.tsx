@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useNear } from "~~/lib/near-provider";
-import { isFollowing, isValidAccountId, setFollow } from "~~/lib/social";
+import { isFollowing, setFollow } from "~~/lib/social";
+import { isValidAccountId } from "~~/lib/social-core";
 import { notification } from "~~/utils/notification";
 
 type ButtonSize = "xs" | "sm" | "lg";
@@ -15,29 +16,27 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 
 export const FollowButton = ({ targetAccountId, size = "sm" }: { targetAccountId: string; size?: ButtonSize }) => {
   const { accountId, signAndSendTransaction } = useNear();
-  const [following, setFollowing] = useState<boolean | null>(null);
+  const [followState, setFollowState] = useState<{ key: string; value: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const target = targetAccountId.toLowerCase().trim();
+  const requestKey = accountId && isValidAccountId(target) ? `${accountId}:${target}` : null;
+  const following = !requestKey ? false : followState?.key === requestKey ? followState.value : null;
 
   useEffect(() => {
+    if (!requestKey || !accountId) return;
     let cancelled = false;
-    if (!accountId || !isValidAccountId(target)) {
-      setFollowing(false);
-      return;
-    }
-    setFollowing(null);
     isFollowing(target, accountId)
       .then(value => {
-        if (!cancelled) setFollowing(value);
+        if (!cancelled) setFollowState({ key: requestKey, value });
       })
       .catch(() => {
-        if (!cancelled) setFollowing(false);
+        if (!cancelled) setFollowState({ key: requestKey, value: false });
       });
     return () => {
       cancelled = true;
     };
-  }, [accountId, target]);
+  }, [accountId, requestKey, target]);
 
   if (accountId === target) return null;
 
@@ -55,7 +54,7 @@ export const FollowButton = ({ targetAccountId, size = "sm" }: { targetAccountId
     try {
       const next = !(following ?? false);
       await setFollow(target, next, { accountId, signAndSendTransaction });
-      setFollowing(next);
+      if (requestKey) setFollowState({ key: requestKey, value: next });
       notification.success(next ? `Following ${target}` : `Unfollowed ${target}`);
     } catch (error) {
       notification.error(error instanceof Error ? error.message : "The follow edge was not written");

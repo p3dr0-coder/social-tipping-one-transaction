@@ -14,12 +14,7 @@ import {
   testnetFollowing,
 } from "./social-db";
 import { delay, toError } from "./shared.ts";
-
-// One stateless encoder reused by every write (hoisted out of the per-call hot path).
-const encoder = new TextEncoder();
-
-export { extractTxHash } from "./tx";
-
+import { assertWriteBudget, isValidAccountId } from "./social-core.ts";
 /** Minimal wallet surface the social and tipping helpers need. */
 export type WalletConnection = {
   accountId: string | null;
@@ -136,72 +131,6 @@ type ApiAccountCard = {
   followers?: number;
   viewer?: { following?: boolean; followed_by?: boolean };
 };
-
-/**
- * Quotas enforced by the FastData indexer, per UTC day unless stated otherwise.
- * Over-quota writes come back as `rate_limited` from the indexer.
- */
-export const QUOTAS = {
-  postsPerDay: 300,
-  maxPostChars: 25_000,
-  likesPerDay: 1_000,
-  repostsPerDay: 300,
-  followsPerDay: 5_000,
-  uploadBytesPerDay: 5 * 1024 * 1024,
-  keysPerTx: 256,
-  keyBytes: 1_024,
-  valueBytes: 256 * 1024,
-  txBytes: 1.5 * 1024 * 1024,
-} as const;
-
-const ACCOUNT_ID_PATTERN = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
-
-export function isValidAccountId(accountId: string): boolean {
-  return accountId.length >= 2 && accountId.length <= 64 && ACCOUNT_ID_PATTERN.test(accountId);
-}
-
-function isImplicitAccountId(accountId: string): boolean {
-  return /^[0-9a-f]{64}$/.test(accountId);
-}
-
-export function isNamedAccountId(accountId: string): boolean {
-  return isValidAccountId(accountId) && !isImplicitAccountId(accountId);
-}
-
-const REPUTATION_TIERS = [
-  { minimumFollowers: 1_000, label: "Luminary" },
-  { minimumFollowers: 100, label: "Steward" },
-  { minimumFollowers: 10, label: "Contributor" },
-] as const;
-
-/**
- * Reputation is derived client-side from the indexer's follower count.
- * Tiers change a label only; no contract state backs them.
- */
-export function reputationFor(followers: number): { label: string; minimumFollowers: number } | null {
-  return REPUTATION_TIERS.find(tier => followers >= tier.minimumFollowers) ?? null;
-}
-
-
-function assertWriteBudget(data: Record<string, unknown>): void {
-  const keys = Object.keys(data);
-  if (keys.length > QUOTAS.keysPerTx) {
-    throw new Error(`a single write carries at most ${QUOTAS.keysPerTx} keys`);
-  }
-  // Limits are bytes, not UTF-16 code units; multi-byte text must not slip past them.
-  for (const key of keys) {
-    if (encoder.encode(key).byteLength > QUOTAS.keyBytes) {
-      throw new Error(`key "${key}" exceeds ${QUOTAS.keyBytes} bytes`);
-    }
-    if (encoder.encode(JSON.stringify(data[key]) ?? "").byteLength > QUOTAS.valueBytes) {
-      throw new Error(`the value for "${key}" exceeds ${QUOTAS.valueBytes} bytes`);
-    }
-  }
-  const txBytes = encoder.encode(JSON.stringify(data)).byteLength;
-  if (txBytes > QUOTAS.txBytes) {
-    throw new Error(`the write is ${txBytes} bytes; a transaction carries at most ${QUOTAS.txBytes}`);
-  }
-}
 
 /**
  * Writes key/value pairs to the FastData receiver.
@@ -351,7 +280,6 @@ async function fetchJson<T>(path: string, params: Record<string, string | number
   return payload as T;
 }
 
-
 function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit ?? 20, 1), 100);
 }
@@ -363,26 +291,37 @@ export function fetchGlobalFeed(cursor?: string, limit?: number, viewer?: string
   return fetchJson<FeedPage<FeedItem>>("/v1/feed/global", { limit: clampLimit(limit), cursor, viewer });
 }
 
-export async function fetchAccount(accountId: string, viewer?: string | null): Promise<AccountProfile> {
-  if (!isValidAccountId(accountId)) throw new Error(`"${accountId}" is not a valid account id`);
-  if (nearConfig.network === "testnet") return testnetAccountProfile(accountId);
+const pendingAccounts = new Map<string, Promise<AccountProfile>>();
 
-  const profile = await fetchJson<ApiProfile>(`/v1/accounts/${encodeURIComponent(accountId)}`, {
-    viewer: viewer ?? undefined,
+export function fetchAccount(accountId: string, viewer?: string | null): Promise<AccountProfile> {
+  if (!isValidAccountId(accountId)) return Promise.reject(new Error(`"${accountId}" is not a valid account id`));
+  const cacheKey = `${accountId}:${viewer ?? ""}`;
+  const inflight = pendingAccounts.get(cacheKey);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    if (nearConfig.network === "testnet") return testnetAccountProfile(accountId);
+    const profile = await fetchJson<ApiProfile>(`/v1/accounts/${encodeURIComponent(accountId)}`, {
+      viewer: viewer ?? undefined,
+    });
+    return {
+      accountId: profile.account_id,
+      hasProfile: profile.has_profile ?? false,
+      name: profile.name ?? null,
+      about: profile.about ?? "",
+      avatar: profile.avatar ?? null,
+      avatarUrl: profile.avatar_url ?? null,
+      followers: profile.counts?.followers ?? 0,
+      following: profile.counts?.following ?? 0,
+      posts: profile.counts?.posts ?? 0,
+      viewerFollowing: profile.viewer?.following,
+      viewerFollowedBy: profile.viewer?.followed_by,
+    };
+  })().finally(() => {
+    pendingAccounts.delete(cacheKey);
   });
-  return {
-    accountId: profile.account_id,
-    hasProfile: profile.has_profile ?? false,
-    name: profile.name ?? null,
-    about: profile.about ?? "",
-    avatar: profile.avatar ?? null,
-    avatarUrl: profile.avatar_url ?? null,
-    followers: profile.counts?.followers ?? 0,
-    following: profile.counts?.following ?? 0,
-    posts: profile.counts?.posts ?? 0,
-    viewerFollowing: profile.viewer?.following,
-    viewerFollowedBy: profile.viewer?.followed_by,
-  };
+  pendingAccounts.set(cacheKey, promise);
+  return promise;
 }
 
 export function fetchAccountPosts(

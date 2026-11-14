@@ -1,6 +1,5 @@
 /**
- * FastFS payload codec. This module has no runtime imports so the one-allocation encoder and
- * its validators can be tested with `node --test` on every supported Node version.
+ * FastFS payload codec. No runtime imports, so `node --test` runs it directly.
  */
 
 /** FastFS accepts a single-transaction `Simple` payload of at most 1 MiB. */
@@ -11,12 +10,25 @@ export const CHUNK_BYTES = 1024 * 1024;
 export const MAX_MEDIA_BYTES = 32 * 1024 * 1024;
 const MAX_RELATIVE_PATH_BYTES = 1024;
 const MAX_MIME_BYTES = 256;
-const textEncoder = new TextEncoder();
 
-/** Borsh string: u32 little-endian byte length followed by the bytes. */
-function writeBorshString(output: Uint8Array, view: DataView, start: number, bytes: Uint8Array): number {
-  view.setUint32(start, bytes.length, true);
-  const offset = start + 4;
+function writeU32LE(output: Uint8Array, offset: number, value: number): number {
+  output[offset] = value & 0xff;
+  output[offset + 1] = (value >>> 8) & 0xff;
+  output[offset + 2] = (value >>> 16) & 0xff;
+  output[offset + 3] = (value >>> 24) & 0xff;
+  return offset + 4;
+}
+
+/** Writes a validated ASCII Borsh string directly into `output` with zero allocations or DataView. */
+function writeBorshAscii(output: Uint8Array, start: number, value: string): number {
+  const len = value.length;
+  const offset = writeU32LE(output, start, len);
+  for (let index = 0; index < len; index += 1) output[offset + index] = value.charCodeAt(index);
+  return offset + len;
+}
+
+function writeBorshBytes(output: Uint8Array, start: number, bytes: Uint8Array): number {
+  const offset = writeU32LE(output, start, bytes.length);
   output.set(bytes, offset);
   return offset + bytes.length;
 }
@@ -25,11 +37,11 @@ export function assertRelativePath(relativePath: string): void {
   const segments = relativePath.split("/");
   const invalid =
     relativePath.length === 0 ||
+    relativePath.length > MAX_RELATIVE_PATH_BYTES ||
     !/^[A-Za-z0-9._\-/]+$/.test(relativePath) ||
     relativePath.startsWith("/") ||
     relativePath.endsWith("/") ||
-    segments.some(segment => segment.length === 0 || segment === "." || segment === "..") ||
-    textEncoder.encode(relativePath).byteLength > MAX_RELATIVE_PATH_BYTES;
+    segments.some(segment => segment.length === 0 || segment === "." || segment === "..");
   if (invalid) {
     throw new Error(
       `"${relativePath}" is not a valid FastFS relative path: ASCII segments separated by "/", no leading, ` +
@@ -45,40 +57,33 @@ export function assertMimeType(mimeType: string): void {
 }
 
 /**
- * `FastfsData::Simple`: enum tag `0x00`, the relative path, then the `Some` content tag
- * `0x01` with the mime type and the file bytes.
- *
- * The encoder writes the whole Borsh value into one output allocation. The old form built
- * five intermediate arrays and copied the file bytes twice.
+ * `FastfsData::Simple`: enum tag `0x00`, relative path, `Some` tag `0x01`, mime type, content.
+ * Single output allocation; ASCII strings and u32 lengths write inline with zero extra buffers.
  */
-export function encodeSimpleFastfsPayload(relativePath: string, mimeType: string, content: Uint8Array): Uint8Array {
+export function encodeSimpleFastfs(relativePath: string, mimeType: string, content: Uint8Array): Uint8Array {
   assertRelativePath(relativePath);
   assertMimeType(mimeType);
 
-  const pathBytes = textEncoder.encode(relativePath);
-  const mimeBytes = textEncoder.encode(mimeType);
-  const total = 1 + 4 + pathBytes.length + 1 + 4 + mimeBytes.length + 4 + content.length;
+  const total = 1 + 4 + relativePath.length + 1 + 4 + mimeType.length + 4 + content.length;
   const output = new Uint8Array(total);
-  const view = new DataView(output.buffer);
   let offset = 0;
 
   output[offset] = 0x00;
   offset += 1;
-  offset = writeBorshString(output, view, offset, pathBytes);
+  offset = writeBorshAscii(output, offset, relativePath);
   output[offset] = 0x01;
   offset += 1;
-  offset = writeBorshString(output, view, offset, mimeBytes);
-  writeBorshString(output, view, offset, content);
+  offset = writeBorshAscii(output, offset, mimeType);
+  writeBorshBytes(output, offset, content);
   return output;
 }
 
 /**
  * `FastfsData::Partial` for one 1 MiB chunk:
  * enum tag `0x01`, `s(relative_path)`, u32-LE `offset`, u32-LE `full_size`,
- * `s(mime_type)`, `s(content_chunk)`, u32-LE `nonce`, where `s(x)` is a u32-LE byte length
- * followed by the bytes.
+ * `s(mime_type)`, `s(content_chunk)`, u32-LE `nonce`.
  */
-export function encodePartialFastfsPayload(
+export function encodePartialFastfs(
   relativePath: string,
   mimeType: string,
   chunk: Uint8Array,
@@ -104,22 +109,17 @@ export function encodePartialFastfsPayload(
     throw new Error(`nonce must be in 1..=2147483647, received ${String(nonce)}`);
   }
 
-  const pathBytes = textEncoder.encode(relativePath);
-  const mimeBytes = textEncoder.encode(mimeType);
-  const total = 1 + 4 + pathBytes.length + 4 + 4 + 4 + mimeBytes.length + 4 + chunk.length + 4;
+  const total = 1 + 4 + relativePath.length + 4 + 4 + 4 + mimeType.length + 4 + chunk.length + 4;
   const output = new Uint8Array(total);
-  const view = new DataView(output.buffer);
   let cursor = 0;
 
   output[cursor] = 0x01;
   cursor += 1;
-  cursor = writeBorshString(output, view, cursor, pathBytes);
-  view.setUint32(cursor, offset, true);
-  cursor += 4;
-  view.setUint32(cursor, fullSize, true);
-  cursor += 4;
-  cursor = writeBorshString(output, view, cursor, mimeBytes);
-  cursor = writeBorshString(output, view, cursor, chunk);
-  view.setUint32(cursor, nonce, true);
+  cursor = writeBorshAscii(output, cursor, relativePath);
+  cursor = writeU32LE(output, cursor, offset);
+  cursor = writeU32LE(output, cursor, fullSize);
+  cursor = writeBorshAscii(output, cursor, mimeType);
+  cursor = writeBorshBytes(output, cursor, chunk);
+  writeU32LE(output, cursor, nonce);
   return output;
 }

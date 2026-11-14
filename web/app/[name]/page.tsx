@@ -1,25 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { AccountGuard } from "~~/components/social/AccountGuard";
 import { Avatar } from "~~/components/social/Avatar";
 import { CastCard } from "~~/components/social/CastCard";
 import { FollowButton } from "~~/components/social/FollowButton";
-import { FollowListModal } from "~~/components/social/FollowListModal";
+import { FollowModal } from "~~/components/social/FollowModal";
 import { Sidebar } from "~~/components/social/Sidebar";
 import { useNear } from "~~/lib/near-provider";
-import {
-  fetchAccount,
-  fetchAccountPosts,
-  isValidAccountId,
-  reputationFor,
-  type AccountProfile,
-  type FeedItem,
-} from "~~/lib/social";
+import { fetchAccount, fetchAccountPosts, type AccountProfile, type FeedItem } from "~~/lib/social";
+import { isValidAccountId, reputationFor } from "~~/lib/social-core";
 import { getTipPreference } from "~~/lib/tips";
-import { useTipAuthor } from "~~/lib/use-tip-author";
+import { useTip } from "~~/lib/use-tip";
 import { notification } from "~~/utils/notification";
 
 export default function AccountPage() {
@@ -30,33 +25,34 @@ export default function AccountPage() {
   const rawName = Array.isArray(params?.name) ? params.name[0] : params?.name;
   const accountId = rawName ? decodeURIComponent(rawName).toLowerCase() : "";
 
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
-  const [posts, setPosts] = useState<FeedItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<{
+    key: string;
+    profile: AccountProfile | null;
+    posts: FeedItem[];
+    cursor: string | null;
+    tipPreference: string | null;
+    error: string | null;
+  } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [modalType, setModalType] = useState<"followers" | "following" | null>(null);
-  const [tipPreference, setTipPreference] = useState<string | null>(null);
-  const { tipAuthor, tipping } = useTipAuthor({
+  const { tipAuthor, tipping } = useTip({
     authorId: accountId,
     viewerId,
     signAndSendTransaction,
   });
 
+  const invalidError = !isValidAccountId(accountId) ? "That is not a valid NEAR account id." : null;
+  const fetchKey = invalidError ? null : `${accountId}:${viewerId ?? ""}`;
+  const loading = Boolean(fetchKey) && data?.key !== fetchKey;
+  const profile = fetchKey && data?.key === fetchKey ? data.profile : null;
+  const posts = fetchKey && data?.key === fetchKey ? data.posts : [];
+  const cursor = fetchKey && data?.key === fetchKey ? data.cursor : null;
+  const tipPreference = fetchKey && data?.key === fetchKey ? data.tipPreference : null;
+  const error = invalidError ?? (fetchKey && data?.key === fetchKey ? data.error : null);
+
   useEffect(() => {
-    if (!isValidAccountId(accountId)) {
-      setLoading(false);
-      setError("That is not a valid NEAR account id.");
-      return;
-    }
-
+    if (!fetchKey) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setPosts([]);
-    setCursor(null);
-
     Promise.all([
       fetchAccount(accountId, viewerId),
       fetchAccountPosts(accountId, undefined, undefined, viewerId ?? undefined),
@@ -64,40 +60,53 @@ export default function AccountPage() {
     ])
       .then(([nextProfile, page, preference]) => {
         if (cancelled) return;
-        setProfile(nextProfile);
-        setPosts(page.items);
-        setCursor(page.next_cursor);
-        setTipPreference(preference);
+        setData({
+          key: fetchKey,
+          profile: nextProfile,
+          posts: page.items,
+          cursor: page.next_cursor,
+          tipPreference: preference,
+          error: null,
+        });
       })
       .catch(cause => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "The account could not be loaded");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setData({
+            key: fetchKey,
+            profile: null,
+            posts: [],
+            cursor: null,
+            tipPreference: null,
+            error: cause instanceof Error ? cause.message : "The account could not be loaded",
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [accountId, viewerId]);
+  }, [fetchKey, accountId, viewerId]);
 
-  const loadMore = useCallback(async () => {
-    if (!cursor) return;
+  const loadMore = async () => {
+    if (!cursor || !fetchKey) return;
     setLoadingMore(true);
     try {
       const page = await fetchAccountPosts(accountId, cursor, undefined, viewerId ?? undefined);
-      setPosts(previous => {
-        const seen = new Set(previous.map(item => item.post.key));
-        return [...previous, ...page.items.filter(item => !seen.has(item.post.key))];
+      setData(previous => {
+        if (!previous || previous.key !== fetchKey) return previous;
+        const seen = new Set(previous.posts.map(item => item.post.key));
+        return {
+          ...previous,
+          posts: [...previous.posts, ...page.items.filter(item => !seen.has(item.post.key))],
+          cursor: page.next_cursor,
+        };
       });
-      setCursor(page.next_cursor);
     } catch (cause) {
       notification.error(cause instanceof Error ? cause.message : "Older posts could not be loaded");
     } finally {
       setLoadingMore(false);
     }
-  }, [accountId, cursor, viewerId]);
-
+  };
   const copyAccountId = async () => {
     await navigator.clipboard.writeText(accountId);
     notification.success("Account id copied");
@@ -169,20 +178,7 @@ export default function AccountPage() {
                                 className="btn btn-ghost btn-sm btn-circle text-primary hover:bg-primary/10 transition-all opacity-50 hover:opacity-100 shrink-0"
                                 title="Copy account id"
                               >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  strokeWidth={2}
-                                  stroke="currentColor"
-                                  className="w-6 h-6"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5"
-                                  />
-                                </svg>
+                                <ClipboardDocumentIcon className="w-6 h-6" />
                               </button>
                             </div>
 
@@ -313,7 +309,7 @@ export default function AccountPage() {
       </div>
 
       {modalType && (
-        <FollowListModal
+        <FollowModal
           isOpen
           onClose={() => setModalType(null)}
           title={modalType === "followers" ? "Followers" : "Following"}

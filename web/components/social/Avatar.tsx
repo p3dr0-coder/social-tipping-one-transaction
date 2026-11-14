@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import Image from "next/image";
 import { nearConfig } from "~~/near.config";
 
 /** Turns a `fastfs://account/social/path` URI into a gateway URL. */
@@ -38,16 +39,18 @@ type AvatarProps = {
 export const Avatar = ({ accountId, avatar, className = "w-10 h-10" }: AvatarProps) => {
   const fallback = useMemo(() => deterministicAvatar(accountId), [accountId]);
   const source = fastfsHttpUrl(avatar) ?? fallback;
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const activeSrc = failedSource === source ? fallback : source;
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={source}
+    <Image
+      src={activeSrc}
       alt={`${accountId} avatar`}
+      width={100}
+      height={100}
+      unoptimized
       className={`${className} rounded-full object-cover`}
-      onError={event => {
-        event.currentTarget.src = fallback;
-      }}
+      onError={() => setFailedSource(source)}
     />
   );
 };

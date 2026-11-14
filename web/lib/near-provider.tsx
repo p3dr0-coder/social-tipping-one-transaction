@@ -1,6 +1,12 @@
 "use client";
 
-import type { ConnectorAction } from "@hot-labs/near-connect";
+import type {
+  ConnectorAction,
+  NearConnector,
+  NearWalletBase,
+  SignMessageParams,
+  SignedMessage,
+} from "@hot-labs/near-connect";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { nearConfig } from "~~/near.config";
@@ -28,78 +34,36 @@ export type SignAndSendTransactionParams = {
   actions: WalletAction[];
 };
 
-/** NEP-413 message payload the connector wallet signs. */
-export type SignMessageParams = {
-  message: string;
-  recipient: string;
-  nonce: Uint8Array;
-  callbackUrl?: string;
-};
-
-/** Wallet answer to `signMessage`; the signature may be base64 text or raw bytes. */
-export type SignedWalletMessage = {
-  accountId?: string | null;
-  publicKey?: string;
-  signature?: string | Uint8Array;
-};
-
-type ConnectorWallet = {
-  getAccounts?: () => Promise<Array<{ accountId: string }>>;
-  signAndSendTransaction: (params: SignAndSendTransactionParams) => Promise<unknown>;
-  signMessage?: (params: SignMessageParams) => Promise<SignedWalletMessage>;
-};
-
-type ConnectorEvents = {
-  "wallet:signIn": { wallet?: ConnectorWallet; accounts?: Array<{ accountId: string }> };
-  "wallet:signOut": unknown;
-};
-
-type Connector = {
-  whenManifestLoaded: Promise<void>;
-  connect: () => Promise<ConnectorWallet>;
-  disconnect: () => Promise<void>;
-  getConnectedWallet?: () => Promise<{ wallet: ConnectorWallet; accounts: Array<{ accountId: string }> }>;
-  use: (plugin: unknown) => Promise<void>;
-  on: <K extends keyof ConnectorEvents>(event: K, callback: (payload: ConnectorEvents[K]) => void) => void;
-  network: "mainnet" | "testnet";
-  providers?: { mainnet?: string[]; testnet?: string[] };
-};
-
-
+export type { SignMessageParams, SignedMessage };
 
 type NearContextValue = {
   accountId: string | null;
-  connector: Connector | null;
+  connector: NearConnector | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   signAndSendTransaction: (params: SignAndSendTransactionParams) => Promise<unknown>;
-  signMessage: (params: SignMessageParams) => Promise<SignedWalletMessage>;
+  signMessage: (params: SignMessageParams) => Promise<SignedMessage>;
 };
 
 const NearContext = createContext<NearContextValue | null>(null);
 
-
-
 export function NearProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [connector, setConnector] = useState<Connector | null>(null);
-  const walletRef = useRef<ConnectorWallet | null>(null);
+  const [connector, setConnector] = useState<NearConnector | null>(null);
+  const walletRef = useRef<NearWalletBase | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    // The connector touches window, localStorage, and IndexedDB, so it is only ever
-    // constructed in the browser after hydration. A static import cannot work here: both
-    // modules are browser-only and would be evaluated during server rendering.
+    // Browser-only modules (touch window, localStorage, IndexedDB); static value import fails SSR.
     async function initialize() {
-      const { NearConnector } = await import("@hot-labs/near-connect");
+      const { NearConnector: ConnectorCtor } = await import("@hot-labs/near-connect");
       const { createAccessKeyPlugin } = await import("function-call-key-plugin");
-      // NEP-516 `evm-on-near`: an optional manifest registers EVM wallets (MetaMask) that
-      // control `0x…` NEAR accounts. Without it the connector only loads native NEAR wallets.
-      const instance = new NearConnector({
+      // NEP-516 `evm-on-near`: optional manifest registers EVM wallets controlling `0x…` NEAR accounts.
+      const instance = new ConnectorCtor({
         network: nearConfig.network,
         ...(nearConfig.evmManifest ? { manifest: nearConfig.evmManifest } : {}),
-      }) as unknown as Connector;
+      });
       await instance.whenManifestLoaded;
       if (cancelled) return;
 
@@ -128,7 +92,7 @@ export function NearProvider({ children }: { children: ReactNode }) {
       setConnector(instance);
 
       try {
-        const restored = await instance.getConnectedWallet?.();
+        const restored = await instance.getConnectedWallet();
         if (!cancelled && restored?.accounts[0]) {
           walletRef.current = restored.wallet;
           setAccountId(restored.accounts[0].accountId);
@@ -150,8 +114,8 @@ export function NearProvider({ children }: { children: ReactNode }) {
     await connector.whenManifestLoaded;
     const wallet = await connector.connect();
     walletRef.current = wallet;
-    const accounts = await wallet.getAccounts?.();
-    const nextAccount = accounts?.[0]?.accountId;
+    const accounts = await wallet.getAccounts();
+    const nextAccount = accounts[0]?.accountId;
     if (nextAccount) setAccountId(nextAccount);
   }, [connector]);
 
@@ -165,20 +129,18 @@ export function NearProvider({ children }: { children: ReactNode }) {
   const signAndSendTransaction = useCallback(async (params: SignAndSendTransactionParams) => {
     const wallet = walletRef.current;
     if (!wallet) throw new Error("connect a wallet before signing a transaction");
-    return wallet.signAndSendTransaction(params);
+    type WalletTx = Parameters<NearWalletBase["signAndSendTransaction"]>[0];
+    return wallet.signAndSendTransaction(params as unknown as WalletTx);
   }, []);
 
   const signMessage = useCallback(async (params: SignMessageParams) => {
     const wallet = walletRef.current;
     if (!wallet) throw new Error("connect a wallet before signing a message");
-    const signer = wallet.signMessage;
-    if (!signer) {
+    if (typeof wallet.signMessage !== "function") {
       throw new Error("the connected wallet does not support NEP-413 message signing");
     }
-    return signer(params);
+    return wallet.signMessage(params);
   }, []);
-
-
 
   const value = useMemo<NearContextValue>(
     () => ({

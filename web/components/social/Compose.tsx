@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useNear } from "~~/lib/near-provider";
-import { createPost, QUOTAS } from "~~/lib/social";
+import { createPost } from "~~/lib/social";
+import { QUOTAS } from "~~/lib/social-core";
 import { notification } from "~~/utils/notification";
 
 export const Compose = () => {

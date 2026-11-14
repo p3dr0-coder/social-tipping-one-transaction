@@ -1,6 +1,8 @@
 import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
-import { extractTxHash, isValidAccountId, type WalletConnection } from "./social";
+import { type WalletConnection } from "./social";
+import { isValidAccountId } from "./social-core";
+import { extractTxHash } from "./tx";
 import { delay, getRpcProvider } from "./shared.ts";
 
 async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -17,8 +19,16 @@ export async function getTipPreference(accountId: string): Promise<string> {
   return view<string>(nearConfig.philiaContract, "get_tip_preference", { account_id: accountId });
 }
 
-export async function getDefaultTip(): Promise<string> {
-  return view<string>(nearConfig.philiaContract, "get_default_tip");
+let pendingDefaultTip: Promise<string> | null = null;
+let cachedTipToken: Promise<TipToken> | null = null;
+
+export function getDefaultTip(): Promise<string> {
+  if (!pendingDefaultTip) {
+    pendingDefaultTip = view<string>(nearConfig.philiaContract, "get_default_tip").finally(() => {
+      pendingDefaultTip = null;
+    });
+  }
+  return pendingDefaultTip;
 }
 
 export type TipToken = {
@@ -26,15 +36,24 @@ export type TipToken = {
   decimals: number;
 };
 
-export async function getTipToken(): Promise<TipToken> {
-  const [ftAccountId, decimals] = await view<[string, number]>(nearConfig.philiaContract, "get_tip_token");
-  // The contract is the single source of truth; the env value is a deployment check only.
-  if (nearConfig.tipFt && nearConfig.tipFt !== ftAccountId) {
-    console.warn(
-      `tips contract ${nearConfig.philiaContract} is bound to ${ftAccountId}, but NEXT_PUBLIC_PHILIA_TIP_FT is ${nearConfig.tipFt}`,
-    );
+/** Contract token binding is set once at init, so one single-flight read serves the session. */
+export function getTipToken(): Promise<TipToken> {
+  if (!cachedTipToken) {
+    cachedTipToken = view<[string, number]>(nearConfig.philiaContract, "get_tip_token")
+      .then(([ftAccountId, decimals]) => {
+        if (nearConfig.tipFt && nearConfig.tipFt !== ftAccountId) {
+          console.warn(
+            `tips contract ${nearConfig.philiaContract} is bound to ${ftAccountId}, but NEXT_PUBLIC_PHILIA_TIP_FT is ${nearConfig.tipFt}`,
+          );
+        }
+        return { ftAccountId, decimals };
+      })
+      .catch(error => {
+        cachedTipToken = null;
+        throw error;
+      });
   }
-  return { ftAccountId, decimals };
+  return cachedTipToken;
 }
 
 type StorageBounds = {
@@ -263,7 +282,6 @@ type OneClickStatusResponse = {
   nearTxHashes?: string[];
   swapDetails?: OneClickSwapDetails | null;
 };
-
 
 export async function getOneClickStatus(depositAddress: string): Promise<OneClickStatus> {
   const address = depositAddress.trim();

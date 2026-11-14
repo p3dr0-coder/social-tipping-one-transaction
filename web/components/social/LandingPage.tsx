@@ -33,8 +33,8 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
           </h1>
 
           <p className="text-xl md:text-2xl opacity-70 mb-12 max-w-2xl mx-auto font-light leading-relaxed">
-            Profiles, posts, follows, and tips stored in the near.social social DB. Your account id is the identity,
-            the social graph is public data, and no application database sits in the middle.
+            Profiles, posts, follows, and tips stored in the near.social social DB. Your account id is the identity, the
+            social graph is public data, and no application database sits in the middle.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -70,9 +70,9 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
                 <h3 className="font-bold">This wallet is an implicit account</h3>
                 <p className="text-sm opacity-70 mt-1">
                   {accountId ? `${accountId.slice(0, 16)}... ` : ""}
-                  is a 64-character implicit account. The social graph addresses people by named account ids, so use
-                  a wallet that holds a named account (for example a sub-account of a named parent) to post, follow,
-                  and tip.
+                  is a 64-character implicit account. The social graph addresses people by named account ids, so use a
+                  wallet that holds a named account (for example a sub-account of a named parent) to post, follow, and
+                  tip.
                 </p>
               </div>
             </div>
@@ -128,7 +128,9 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
                 key={feature.title}
                 className="bg-base-200/50 p-8 rounded-[2rem] border border-white/5 hover:border-primary/20 transition-all hover:-translate-y-1 group"
               >
-                <div className={`w-14 h-14 flex items-center justify-center rounded-2xl ${feature.color} text-2xl mb-6 shadow-inner`}>
+                <div
+                  className={`w-14 h-14 flex items-center justify-center rounded-2xl ${feature.color} text-2xl mb-6 shadow-inner`}
+                >
                   {feature.icon}
                 </div>
                 <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
@@ -161,7 +163,10 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
                 a: "Everyone. Social writes are public by design; do not post anything you need to keep private.",
               },
             ].map(item => (
-              <div key={item.q} className="collapse collapse-arrow bg-base-200/50 border border-white/5 rounded-2xl overflow-hidden">
+              <div
+                key={item.q}
+                className="collapse collapse-arrow bg-base-200/50 border border-white/5 rounded-2xl overflow-hidden"
+              >
                 <input type="radio" name="faq-accordion" />
                 <div className="collapse-title text-lg font-bold p-6">{item.q}</div>
                 <div className="collapse-content px-6 pb-6 opacity-60">
@@ -177,10 +182,20 @@ export const LandingPage = ({ hasNoAccount }: { hasNoAccount?: boolean }) => {
         <div className="container mx-auto px-6 text-sm flex flex-col items-center gap-4">
           <p className="opacity-40 font-medium">philia · MIT · built on the near.social social DB</p>
           <div className="flex gap-6 opacity-60">
-            <a href="https://near.social" className="hover:text-primary transition-colors" target="_blank" rel="noreferrer">
+            <a
+              href="https://near.social"
+              className="hover:text-primary transition-colors"
+              target="_blank"
+              rel="noreferrer"
+            >
               near.social
             </a>
-            <a href="https://github.com" className="hover:text-primary transition-colors" target="_blank" rel="noreferrer">
+            <a
+              href="https://github.com"
+              className="hover:text-primary transition-colors"
+              target="_blank"
+              rel="noreferrer"
+            >
               Source
             </a>
           </div>

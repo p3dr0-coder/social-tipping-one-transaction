@@ -12,7 +12,7 @@ type TipAuthorInput = {
 };
 
 /** Shared tip action for a post card and the account profile page. */
-export function useTipAuthor({ authorId, viewerId, signAndSendTransaction }: TipAuthorInput) {
+export function useTip({ authorId, viewerId, signAndSendTransaction }: TipAuthorInput) {
   const [tipping, setTipping] = useState(false);
 
   const tipAuthor = useCallback(async () => {

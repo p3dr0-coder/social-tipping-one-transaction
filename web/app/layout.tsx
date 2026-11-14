@@ -4,7 +4,7 @@ import { NotificationToaster } from "~~/utils/notification";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { ThemeProvider } from "~~/components/ThemeProvider";
-import { ScrollToTop } from "~~/components/social/ScrollToTop";
+import { ScrollTop } from "~~/components/social/ScrollTop";
 import { NearProvider } from "~~/lib/near-provider";
 import "~~/styles/globals.css";
 
@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Footer />
             </div>
             <NotificationToaster />
-            <ScrollToTop />
+            <ScrollTop />
           </NearProvider>
         </ThemeProvider>
       </body>

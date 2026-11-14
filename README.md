@@ -4,6 +4,8 @@ philia is an on-chain social app. Profiles, posts, follow edges, and tip prefere
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"14px"}}}%%
 sequenceDiagram
+    accTitle: philia runtime flow
+    accDescr: Wallet signs a tip transaction, the app confirms it, and the contract stores the preference.
     autonumber
     participant U as NEAR Connect wallet
     participant W as philia-web app
@@ -11,13 +13,13 @@ sequenceDiagram
     participant P as philia-tips contract
     participant F as bound NEP-141 token
     participant R as NEAR RPC
-    rect rgb(226,238,255)
+    rect rgba(226,238,255,0.20)
     Note over W,S: PHASE 1 — Read social profile
     W->>S: GET /v1/accounts/{id} and follower pages
     S-->>W: profile, counts, posts, next cursor
     W->>W: derive badge from counts 10 100 1000
     end
-    rect rgb(230,247,235)
+    rect rgba(230,247,235,0.20)
     Note over W,F: PHASE 2 — Build tip intent
     W->>W: guard account id, viewer, and self-tip
     W->>P: get_tip_token()
@@ -29,14 +31,14 @@ sequenceDiagram
     F-->>W: null for an unregistered author
     Note over W,F: storage_balance_bounds guards an unregistered author
     end
-    rect rgb(255,244,214)
+    rect rgba(255,244,214,0.20)
     Note over U,W: PHASE 3 — Sign delegate
     W->>U: signAndSendTransaction(storage_deposit) when unregistered
     W->>U: signAndSendTransaction(ft_transfer, 1 yoctoNEAR)
     U->>U: sign with full-access or function-call key
     U-->>W: signed outcome or thrown error
     end
-    rect rgb(243,232,255)
+    rect rgba(243,232,255,0.20)
     Note over R,W: PHASE 4 — Relay to RPC
     W->>R: broadcast the signed transaction
     alt receipt executes
@@ -45,21 +47,21 @@ sequenceDiagram
     R-->>W: CodeDoesNotExist, receipt still succeeds
     end
     end
-    rect rgb(255,232,232)
+    rect rgba(255,232,232,0.20)
     Note over W,F: PHASE 5 — Confirm transfer
     W->>W: extractTxHash reads transaction, outcome, or context
     W->>W: throw when the outcome carries no hash
     W->>F: ft_balance_of(author)
     F-->>W: base units credited to the author
     end
-    rect rgb(224,247,250)
+    rect rgba(224,247,250,0.20)
     Note over W,S: PHASE 6 — Settle outcome
     W->>S: GET /v1/tx/{hash} every 1500 ms
     S-->>W: indexed flag and per-key status
     Note over W,S: invalid, ignored, or rate_limited fails. Never retry.
     W->>W: sumOutcomeFees over tokens_burnt
     end
-    rect rgb(255,248,225)
+    rect rgba(255,248,225,0.20)
     Note over P,W: PHASE 7 — Write receipt
     W->>P: set_tip_preference(amount) with a storage deposit
     P->>P: parse_units, flush, measure storage_usage

@@ -210,7 +210,7 @@ Submission: tag `hackathon-submission` marks the submitted state. `git rev-parse
 Diff: `git diff pre-hackathon..hackathon-submission`. After publishing, `https://github.com/<owner>/<repo>/compare/pre-hackathon...hackathon-submission`.
 Libraries, templates and AI-generated code are listed in `ATTRIBUTION.md` and `NOTICE`.
 ## Origin, license, and attribution
-Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). The origin ran from 2026-02-08 to 2026-03-14 and has 2 stars. It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`. The UI layer is reused; data, wallet, and payment layers are rebuilt on NEAR. Origin defects the port removes: a tip-preference key mismatch (readers fell back to `0.1`; now one source, `get_tip_preference(author)`), a follower count read from an unwritten record (now `counts.followers` and `/v1/accounts/{id}/followers`), a 20-cast cap and 20,000-block scan (now append-only posts and full-history indexer feeds), and docs claiming ETH over Sepolia USDC transfers (now NEP-141 only via `get_tip_token()`).
+Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`.
 
 See [`LICENSE`](./LICENSE), [`ATTRIBUTION.md`](./ATTRIBUTION.md), and [`NOTICE`](./NOTICE) (Scaffold-ETH 2 baseline, with the EVM workspace deleted).
 ## Hackathon fit and constraints

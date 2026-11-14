@@ -28,7 +28,7 @@ Q-012 video required when judges cannot open the demo. Tags @NEARProtocol, #NEAR
 | leadName | 2-80 chars | EMPTY |
 | email | valid, <=160, max 2 submissions per address (Q-015) | EMPTY |
 | size | `1` / `2 - 4` / `4 - 6` / `6 - 8` / `8+` | EMPTY |
-| tracks | >=1 track id, each once; `social`, `realworld` fit | EMPTY |
+| tracks | >=1 track id, each once; `social`, `open` fit | EMPTY |
 | nearAddress | 2-64 lowercase mainnet account the team creates | EMPTY |
 | projectUrl | http(s), <=300, public repo, unique | EMPTY |
 | demoUrl | http(s), <=300, published X post | EMPTY |

@@ -41,7 +41,7 @@ Never add `website`. Print full JSON, wait for explicit yes. 201 saved. 400 fix 
 - Q-003: `origin-baseline` tag exists (verified), but no `pre-hackathon` / `hackathon-submission` pair and no README diff link. **Not satisfied**, so local tags were deliberately not created.
 - Q-012 video required when judges cannot open the demo.
 - Q-014 `LICENSE` present. Q-017 README "Quickstart" at line 80 with numbered install/config/account/build steps.
-- Q-015 second project on same email must be named in README. Unresolved.
+- Q-015 second project on same email named in README (Baseline and disclosure: ekklesia).
 - HELD: 0 suppression markers (`Avatar.tsx` now uses `next/image`), Node 26 `module.register` deprecation, TS7 `toBase64` typing.
 
 ## Blockers (do not block submission)

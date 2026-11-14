@@ -1,6 +1,8 @@
 # philia — social on NEAR
 philia is an on-chain social app. Profiles, posts, follow edges, and tip preferences live in NEAR-native storage. There is no application database or server-side account system. A named NEAR account is the identity, the wallet is the login, and the social graph is public data. The app ships a Rust tipping-preferences contract and a zero-funds testnet demo. The demo sets a profile and publishes a post. It follows an account, reads the feed and follower list, and settles a tip.
 
+Tracks: `social`, `open` (end 2026-11-14T23:59:00Z) · License: MIT ([LICENSE](./LICENSE)) · Baseline: tag `pre-hackathon` at `c716879` (SocialENS port); diff `git diff pre-hackathon..hackathon-submission`.
+
 ```mermaid
 sequenceDiagram
     accTitle: philia runtime flow
@@ -203,12 +205,24 @@ node demo/measure-tip.mjs
 
 Testnet `social` writes return `AccountDoesNotExist` by design while KV still indexes them. `/v1/tx` is mainnet-only. All three scripts refuse mainnet and exit non-zero on unexpected errors.
 
+## Claim → evidence
+| Claim | Evidence |
+|---|---|
+| Tip amounts parse without floats, identically in contract and client | `contract/src/units.rs:37` (`parse_units`); `demo/test/near-rpc.test.mjs:12` (`parseUnits mirrors the contract parser`) |
+| NEP-413 signatures verified, nonce/recipient/nonce binding enforced | `web/lib/auth.ts:152` (`verifyMessage`); `web/test/lib.test.mjs` (`auth nonce and payload keep the 32-byte guarantee and fail-fast validation`) |
+| Tip confirmation extracts hashes from wallet, RPC, and failure shapes | `web/test/lib.test.mjs:260` (`extractTxHash extracts hashes from wallet, RPC, and nested failure shapes`) |
+| Demo ends with a post indexed and a tip settled | `demo/social-loop.mjs:384` prints `done: a post indexed + a tip settled` |
+| Contract behavior in sandbox | `contract/tests/test_basics.rs` (`cargo test`, Linux/macOS) |
+| Gas, latency, and storage numbers | [Numbers](#numbers), produced by `demo/measure.mjs`, `demo/measure-storage.mjs`, `demo/measure-tip.mjs` |
+| JS suite green | `pnpm test` → 24/24 pass, exit 0 (measured 2026-11-14) |
+
 ## Baseline and disclosure
 
 Baseline: tag `pre-hackathon` marks the imported tree at `c716879` (SocialENS).
 Submission: tag `hackathon-submission` marks the submitted state. `git rev-parse --short hackathon-submission` prints it.
 Diff: `git diff pre-hackathon..hackathon-submission`. After publishing, `https://github.com/<owner>/<repo>/compare/pre-hackathon...hackathon-submission`.
 Libraries, templates and AI-generated code are listed in `ATTRIBUTION.md` and `NOTICE`.
+Q-015: the second project on the same submission email is **ekklesia** (agent market, tracks `swarms`, `agents`).
 ## Origin, license, and attribution
 Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`.
 
@@ -222,7 +236,7 @@ pnpm dev                          # web app
 pnpm build                        # production build
 pnpm lint                         # eslint .
 pnpm check-types                  # tsc --noEmit
-pnpm test                         # node --test: consolidated lib suite + demo near-rpc
+pnpm test                         # node --test: consolidated lib suite + demo near-rpc — 24/24 pass, exit 0 (measured 2026-11-14)
 cd contract && cargo test --lib   # decimal parser unit tests
 cd contract && cargo test         # sandbox integration test (Linux or macOS)
 node demo/social-loop.mjs         # zero-funds testnet loop

@@ -3,18 +3,18 @@
 Track: `social` (spec `p0-social.md`). Deadline 2026-11-14T23:59:00Z.
 No push, no remote, no tags, no X post, no submit. Local commit only.
 
-## Judge quickstart (do X → see Y), MEASURED pre-Celesto-only
+## Judge quickstart (do X → see Y), MEASURED on Celesto Box B
 
 ```
-pnpm test                 -> 19/19 pass, EXIT 0
-pnpm check-types          -> tsc 7.0.2, EXIT 0
-pnpm lint                 -> eslint 10.15.0, 0 warnings / 0 errors
-pnpm build                -> Next 16.4.6, 4 routes, EXIT 0 (19.7s)
-pnpm peers check          -> "No peer dependency issues found"
-WSL cargo test --lib      -> 24/24 pass (6m50s cold; rustc 1.100.0,
-                             near-sdk 5.30.2, near-sandbox 0.4.1)
-cargo near build          -> wasm 138,431 B
-git diff --check          -> EXIT 0; ADDED_SUPPRESSION_MARKERS=0
+pnpm test                     -> 23/23 pass, EXIT 0
+pnpm check-types               -> tsc 7.0.2, EXIT 0
+pnpm lint                      -> eslint 10.15.0, 0 warnings / 0 errors
+pnpm build                     -> Next 16.4.6, 4 routes, EXIT 0
+pnpm peers check               -> "No peer dependency issues found"
+cargo test --lib               -> 24/24 pass (rustc 1.100.0, near-sdk 5.30.2)
+cargo test --test test_basics  -> 2/2 pass (near-sandbox 0.4.1)
+cargo near build               -> wasm 124,602 B
+git diff --check               -> EXIT 0; ADDED_SUPPRESSION_MARKERS=0
 ```
 
 `Map.getOrInsert` engine gate removed: 903 → 48 allocs, 32.5k → 17.6k ns.
@@ -58,15 +58,15 @@ same requestId.
 - Q-014 `LICENSE` present. Q-017 README "Quickstart" at line 43 with numbered
   install/config/account/build steps.
 - Q-015 second project on same email must be named in README. Unresolved.
-- HELD: 1 pre-existing `Avatar.tsx:43` eslint-disable (unchanged), Node 26
+- HELD: 0 suppression markers (`Avatar.tsx` now uses `next/image`), Node 26
   `module.register` deprecation, TS7 `toBase64` typing.
 
 ## Blockers (do not block submission)
 
-Celesto `Trial credit is too low to start this sandbox` → clippy/cargo-near/
-gas re-verify BLOCKED-BY-CELESTO. Firecrawl daily credits BLOCKED. Exa MCP
-402 → direct REST + keenable. BoxLite §6 MEASURED `kkCM4DpkbXU6` (two earlier
-nested-quoting 401 failures quoted verbatim, no box leaked).
+No Box B gate is blocked. The earlier `Trial credit is too low` limit is gone.
+`cargo clippy --all-targets`, `cargo near build`, and both test suites ran.
+Firecrawl and Exa MCP credits were limited in W3; Exa direct REST and
+keenable replaced them. BoxLite §6 MEASURED `kkCM4DpkbXU6`.
 
 ## Attestation
 

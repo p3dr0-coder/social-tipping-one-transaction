@@ -1,5 +1,4 @@
 # philia — social on NEAR
-philia is an on-chain social app. Profiles, posts, follow edges, and tip preferences live in NEAR-native storage. There is no application database or server-side account system. A named NEAR account is the identity, the wallet is the login, and the social graph is public data. The app ships a Rust tipping-preferences contract and a zero-funds testnet demo. The demo sets a profile and publishes a post. It follows an account, reads the feed and follower list, and settles a tip.
 
 Tracks: `social`, `open` (end 2026-11-14T23:59:00Z) · License: MIT ([LICENSE](./LICENSE)) · Baseline: tag `pre-hackathon` at `c716879` (SocialENS port); diff `git diff pre-hackathon..hackathon-submission`.
 
@@ -46,8 +45,6 @@ sequenceDiagram
 ```
 ## What you can do
 - Sign in with a named NEAR account (no email, password, or app record). Set a profile, publish posts, follow accounts, and read the global feed and follower lists.
-- Tip in the bound NEP-141 token at the author's stored per-account preference; reputation badges derive client-side from indexer follower counts.
-- Mainnet writes confirm by hash via the indexer (rejected keys shown); testnet SocialDB writes return after submission because api2 is mainnet-only.
 ## Architecture
 | Layer | Design |
 |---|---|
@@ -77,15 +74,11 @@ bash scripts/create-accounts.sh
 bash scripts/deploy.sh
 ```
 
-`scripts/deploy.sh` deploys to `PHILIA_CONTRACT` (`philia.testnet`). It passes `TIP_FT` (Circle testnet USDC, 6 decimals) and `TIP_DECIMALS` (6). This binds one token permanently. Override with:
-
 ```bash
 PHILIA_CONTRACT=tips.philia.testnet TIP_FT=wrap.testnet TIP_DECIMALS=24 bash scripts/deploy.sh
 ```
 
 The zero-funds run used `tips.philia.testnet` (`ft_account_id=wrap.testnet`, `decimals=24`, 1 NEAR wrapped, `bob` registered). Demo `PHILIA_CONTRACT`, `TIP_FT`, and `NEXT_PUBLIC_PHILIA_CONTRACT` in `web/.env.local` must match `get_tip_token()`. A mismatch is a deployment error.
-
-5. Export demo keys in your shell (never commit keys, and fund `alice` with the bound token or wNEAR), then run:
 
 ```bash
 export ALICE_ACCOUNT=alice.philia.testnet
@@ -96,7 +89,6 @@ export TIP_FT=3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af
 export SOCIALDB_CONTRACT_ID=v1.social08.testnet
 node demo/social-loop.mjs
 ```
-Expected final line (after profile, post, follow, feed/follower reads, and NEP-141 transfer hashes):
 
 ```
 done: a post indexed + a tip settled
@@ -106,7 +98,6 @@ The script fails fast on missing vars or mismatched network IDs. Afterward, run 
 PHILIA_NETWORK=mainnet ALICE_ACCOUNT=you.near ALICE_PRIVATE_KEY=... node demo/social-loop.mjs
 ```
 ## `CodeDoesNotExist` is success
-`social` holds no contract code, so `__fastdata_kv` returns `CodeDoesNotExist` while the receipt succeeds. Never retry:
 1. Extract the transaction hash.
 2. Poll `https://api2.near.social/v1/tx/{hash}` every 1.5 seconds.
 3. Succeed only when `indexed` is `true` and every `actions[].keys[].status` is `ok`.
@@ -116,7 +107,6 @@ Key statuses `invalid`, `ignored`, `rate_limited`, `key_too_long`, or `value_too
 ## NEP-413 authentication and replay
 `web/lib/auth.ts` verifies signatures with `near-api-js/nep413` `verifyMessage`. It requires an on-chain `FullAccess` key. It also matches message, recipient, nonce, and callback URL. This repo has no backend store. Production backends MUST mint a 32-byte nonce per session and bind it. Accept each nonce once, check `recipient`, and reject replays.
 ## Limits and costs
-FastData UTC-day quotas (over-quota writes return `rate_limited`):
 
 | Limit | Value |
 |---|---|
@@ -130,13 +120,9 @@ FastData UTC-day quotas (over-quota writes return `rate_limited`):
 | Value size | 256 KiB |
 | Transaction size | 1.5 MiB |
 
-Edits and deletes keep public history. Avatars cap at 1 MiB per FastFS upload.
-
 - **Costs:** named accounts cost 0.007 NEAR in gas for 770 bytes (extra bytes stake 1e19 yocto/B per NEP-448; `scripts/create-accounts.sh` faucets the parent and creates two sub-accounts at 0.1 NEAR); testnet SocialDB needs 0.02 NEAR storage (the demo attaches 0.05); tip-preference storage deposits for growth, costs 0 for equal-length updates, refunds shrinks, ~0.001–0.002 NEAR per ≤64-byte record (see `demo/measure-storage.mjs`).
-- **Function-call key:** signs zero-deposit `__fastdata_kv` and `__fastdata_fastfs` calls only. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` always use wallet signing. Key allowance is not a spend limit.
 - **Testnet vs mainnet:** testnet SocialDB (`v1.social08.testnet`) is not indexed by api2.near.social (there is no testnet api2 API); raw testnet FastData writes index at `kv.test.fastnear.com`; mainnet writes target `social` and `api2.near.social`; default testnet RPC is `https://rpc.testnet.fastnear.com` (override with `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL`). Accounts are not unique humans, so daily quotas only bound per-account spam.
 ## Tip assets and fees
-Each `philia-tips` deployment binds one NEP-141 token (`ft_transfer`):
 
 | Path | Asset | Decimals | Use |
 |---|---|---|---|
@@ -153,7 +139,6 @@ near call wrap.testnet ft_transfer '{"receiver_id":"bob.philia.testnet","amount"
 ```
 Cross-chain tips use 1Click (`POST /v0/quote`, `destinationAsset` `nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`, `dry: true`). Fees are 25 bps unauthenticated, 20 bps authenticated (0.2%), and 1 bp for stablecoin pairs. Since 2026-10-27 1Click defaults to confidential swaps. So `GET /v0/status?depositAddress=…` `nearTxHashes` may show shield or unshield txs. These are not a public swap hash, and philia makes no privacy claim. Only `SUCCESS` succeeds. The terminal failures are `REFUNDED`, `FAILED`, and `INCOMPLETE_DEPOSIT`.
 ## Numbers
-Reproduce on testnet (all runs protocol 88, 2026-11-12):
 
 ```bash
 export NEAR_RPC_URL=https://rpc.testnet.fastnear.com
@@ -194,7 +179,6 @@ Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). It wo
 
 See [`LICENSE`](./LICENSE), [`ATTRIBUTION.md`](./ATTRIBUTION.md), and [`NOTICE`](./NOTICE) (Scaffold-ETH 2 baseline, with the EVM workspace deleted).
 ## Hackathon fit and constraints
-Tracks: `social`, `open` (end 2026-11-14T23:59:00Z). Uses neither SputnikDAO nor Trezu. It relies on named NEAR accounts, custom `philia-tips`, and client-derived follower tiers (≥10 / ≥100 / ≥1,000). Nothing is stored on-chain. The app reads `/v1/accounts/{id}`. No privacy layer, NFT wallet, or spend firewall.
 - Avatars cap at 1 MiB (`Simple`). Larger media uses 1 MiB `Partial` chunks up to 32 MiB.
 ## Development commands
 ```bash
@@ -209,7 +193,6 @@ node demo/social-loop.mjs         # zero-funds testnet loop
 node demo/measure.mjs             # gas, latency, protocol (testnet)
 node demo/measure-storage.mjs     # tips-contract storage cost (testnet)
 ```
-Optional contributor skills:
 
 ```bash
 npx skills add near/agent-skills --skill near-smart-contracts --skill near-dapp --skill near-api-js --skill near-intents --skill near-kit

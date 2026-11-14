@@ -59,9 +59,10 @@ near-philia/
 
 ## Quickstart
 
-Prerequisites: Node.js >= 26.0.0 (the app uses `Map.getOrInsert` and the `Uint8Array`
-base64/hex codecs from V8 14.6), pnpm >= 10.4.1, Rust 1.95.0 with
-`wasm32-unknown-unknown`, `cargo-near` 0.23.0, and `near-cli-rs` 0.31.1.
+Prerequisites: Node.js >= 26.0.0 (V8 14.6 ships the `Uint8Array` base64/hex
+codecs; `Map.getOrInsert` is available, but the app uses a portable `Map` pattern),
+pnpm >= 12.18.0, Rust 1.100.0 with `wasm32-unknown-unknown`, `cargo-near` 0.23.0,
+and `near-cli-rs` 0.31.1.
 
 ```bash
 # 1. Install the JavaScript workspaces (web + demo).
@@ -395,9 +396,9 @@ following is the checklist for the person who does:
 ```bash
 pnpm dev                 # web app
 pnpm build               # production build
-pnpm lint                # next lint
+pnpm lint                # eslint .
 pnpm check-types         # tsc --noEmit
-pnpm test                # node --test: FastFS codec, FastData core, byte codecs
+pnpm test                # node --test: consolidated lib suite + demo near-rpc
 cd contract && cargo test --lib   # decimal parser unit tests, no node
 cd contract && cargo test         # sandbox integration test (Linux or macOS)
 node demo/social-loop.mjs         # zero-funds testnet loop

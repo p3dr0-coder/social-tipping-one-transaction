@@ -104,17 +104,24 @@ export function parseUnits(amount, decimals) {
   return units;
 }
 
-/** Sums burnt gas and tokens across all receipts plus the transaction signature outcome. */
+/**
+ * Sums burnt gas and tokens across all receipts plus the signature outcome.
+ *
+ * `gas_burnt` is a JSON number (always below 2^53), so it accumulates as a Number.
+ * `tokens_burnt` is a u128 decimal string, so it accumulates as a BigInt. Both shape
+ * variants of the signature fee are read once, so the fee is never counted twice.
+ */
 export function sumOutcomeFees(final) {
   const receipts = Array.isArray(final?.receipts_outcome) ? final.receipts_outcome : [];
-  let gas = 0n;
+  let gas = 0;
   let tokens = 0n;
   for (const entry of receipts) {
-    gas += BigInt(entry?.outcome?.gas_burnt ?? 0);
-    tokens += BigInt(entry?.outcome?.tokens_burnt ?? 0);
+    const outcome = entry?.outcome;
+    gas += Number(outcome?.gas_burnt ?? 0);
+    tokens += BigInt(outcome?.tokens_burnt ?? 0);
   }
   const txFee = final?.transaction_outcome?.outcome ?? final?.outcomes_agg?.transaction_fee ?? {};
-  gas += BigInt(txFee?.gas_burnt ?? 0);
+  gas += Number(txFee?.gas_burnt ?? 0);
   tokens += BigInt(txFee?.tokens_burnt ?? 0);
   return { receipts: receipts.length, gas, tokens };
 }

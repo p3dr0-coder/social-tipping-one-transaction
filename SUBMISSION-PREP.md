@@ -1,12 +1,9 @@
 # SUBMISSION-PREP — philia (LOCAL DRAFT, NOT SUBMITTED)
-
-Track: `social` (spec `p0-social.md`). Deadline 2026-11-14T23:59:00Z.
-No push, no remote, no tags, no X post, no submit. Local commit only.
+Track: `social` (spec `p0-social.md`). Deadline 2026-11-14T23:59:00Z. No push, no remote, no tags, no X post, no submit. Local commit only.
 
 ## Judge quickstart (do X → see Y), MEASURED on Celesto Box B
-
 ```
-pnpm test                     -> 23/23 pass, EXIT 0
+pnpm test                     -> 24/24 pass, EXIT 0
 pnpm check-types               -> tsc 7.0.2, EXIT 0
 pnpm lint                      -> eslint 10.15.0, 0 warnings / 0 errors
 pnpm build                     -> Next 16.4.6, 4 routes, EXIT 0
@@ -16,21 +13,14 @@ cargo test --test test_basics  -> 2/2 pass (near-sandbox 0.4.1)
 cargo near build               -> wasm 124,602 B
 git diff --check               -> EXIT 0; ADDED_SUPPRESSION_MARKERS=0
 ```
-
-`Map.getOrInsert` engine gate removed: 903 → 48 allocs, 32.5k → 17.6k ns.
-FastData real `/v0/multi` K=16: 157 ms / 1 round trip vs serial 2512 ms /
-16 round trips, oracle-equal. `date-fns` → native `Intl`.
-
+`Map.getOrInsert` engine gate removed: 903 → 48 allocs, 32.5k → 17.6k ns. FastData real `/v0/multi` K=16: 157 ms for 1 round trip. Serial takes 2512 ms for 16 round trips, oracle-equal. `date-fns` → native `Intl`.
 ## Recordable demo outline (human records, human posts)
-
 1. Sign in with a named NEAR account, set a profile, publish a post.
 2. Follow another account, tip it through the Rust preference contract.
 3. Show the tip preference readback. One moment, visible result.
-Q-012 video required when judges cannot open the demo. Tags @NEARProtocol,
-#NEARHackathon. Main writes no post.
+Q-012 video required when judges cannot open the demo. Tags @NEARProtocol, #NEARHackathon. Main writes no post.
 
 ## Payload fields — ALL EMPTY, human supplies every value
-
 | Field | Rule | Value |
 |---|---|---|
 | requestId | UUID, generated ONCE, reused on 400/503 | EMPTY |
@@ -45,29 +35,17 @@ Q-012 video required when judges cannot open the demo. Tags @NEARProtocol,
 | idea | 20-2000 chars | EMPTY |
 | consent | `true` only after verbatim notice + human yes | EMPTY |
 
-Never add `website`. Print full JSON, wait for explicit yes. 201 saved;
-400 fix `fields` + same requestId; 403 stop; 409 stop; 413 shorten; 503 retry
-same requestId.
+Never add `website`. Print full JSON, wait for explicit yes. 201 saved. 400 fix `fields` + same requestId. 403 stop. 409 stop. 413 shorten. 503 retry same requestId.
 
 ## Rules checklist
-
-- Q-003: `origin-baseline` tag exists (verified), but no `pre-hackathon` /
-  `hackathon-submission` pair and no README diff link. **Not satisfied**;
-  local tags deliberately not created.
+- Q-003: `origin-baseline` tag exists (verified), but no `pre-hackathon` / `hackathon-submission` pair and no README diff link. **Not satisfied**, so local tags were deliberately not created.
 - Q-012 video required when judges cannot open the demo.
-- Q-014 `LICENSE` present. Q-017 README "Quickstart" at line 43 with numbered
-  install/config/account/build steps.
+- Q-014 `LICENSE` present. Q-017 README "Quickstart" at line 80 with numbered install/config/account/build steps.
 - Q-015 second project on same email must be named in README. Unresolved.
-- HELD: 0 suppression markers (`Avatar.tsx` now uses `next/image`), Node 26
-  `module.register` deprecation, TS7 `toBase64` typing.
+- HELD: 0 suppression markers (`Avatar.tsx` now uses `next/image`), Node 26 `module.register` deprecation, TS7 `toBase64` typing.
 
 ## Blockers (do not block submission)
-
-No Box B gate is blocked. The earlier `Trial credit is too low` limit is gone.
-`cargo clippy --all-targets`, `cargo near build`, and both test suites ran.
-Firecrawl and Exa MCP credits were limited in W3; Exa direct REST and
-keenable replaced them. BoxLite §6 MEASURED `kkCM4DpkbXU6`.
+No Box B gate is blocked. The earlier `Trial credit is too low` limit is gone. `cargo clippy --all-targets`, `cargo near build`, and both test suites ran. Firecrawl and Exa MCP credits were limited in W3. Exa direct REST and keenable replaced them. BoxLite §6 MEASURED `kkCM4DpkbXU6`.
 
 ## Attestation
-
 Nothing published, pushed, tagged, or submitted. No payload value invented.

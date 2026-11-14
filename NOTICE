@@ -1,11 +1,7 @@
 # NOTICE
 
 ## Origin and baseline
-
-This project ports **SocialENS** (https://github.com/NikhilRaikwar/SocialENS, MIT; verbatim license in [`LICENSE`](./LICENSE)). Reuse vs. rewrite details live in [`ATTRIBUTION.md`](./ATTRIBUTION.md).
-
-SocialENS came from Scaffold-ETH 2 (Next.js, Tailwind CSS, daisyUI). Only that generic UI shell remains; EVM hooks, ABIs, connectors, and contract workspaces were removed.
+This project ports **SocialENS** (https://github.com/NikhilRaikwar/SocialENS, MIT, with the verbatim license in [`LICENSE`](./LICENSE)). Reuse vs. rewrite details live in [`ATTRIBUTION.md`](./ATTRIBUTION.md). SocialENS came from Scaffold-ETH 2 (Next.js, Tailwind CSS, daisyUI). Only that generic UI shell remains, because EVM hooks, ABIs, connectors, and contract workspaces were removed.
 
 ## Third-party software
-
-Each workspace manifest lists its exact dependencies, all under their own licenses. `web/package.json` pins Next.js, React, NEAR Connect, `near-api-js`, `near-social-js`, the access-key plugin, Tailwind CSS, daisyUI, and UI helpers. `demo/package.json` pins `near-api-js`, and `contract/Cargo.toml` pins `near-sdk` plus the sandbox test crates.
+Each workspace manifest lists its exact dependencies, all under their own licenses. `web/package.json` pins Next.js, React, NEAR Connect, `near-api-js`, and `near-social-js`. It also pins the access-key plugin, Tailwind CSS, daisyUI, and UI helpers. `demo/package.json` pins `near-api-js`, and `contract/Cargo.toml` pins `near-sdk` plus the sandbox test crates.

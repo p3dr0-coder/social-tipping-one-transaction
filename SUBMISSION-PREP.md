@@ -7,13 +7,12 @@ pnpm test                     -> 24/24 pass, EXIT 0
 pnpm check-types               -> tsc 7.0.2, EXIT 0
 pnpm lint                      -> eslint 10.15.0, 0 warnings / 0 errors
 pnpm build                     -> Next 16.4.6, 4 routes, EXIT 0
-pnpm peers check               -> "No peer dependency issues found"
 cargo test --lib               -> 24/24 pass (rustc 1.100.0, near-sdk 5.30.2)
 cargo test --test test_basics  -> 2/2 pass (near-sandbox 0.4.1)
-cargo near build               -> wasm 124,602 B
+cargo near build               -> wasm 138,399 B (w4-remote-clean-wasm.log)
 git diff --check               -> EXIT 0; ADDED_SUPPRESSION_MARKERS=0
 ```
-`Map.getOrInsert` engine gate removed: 903 → 48 allocs, 32.5k → 17.6k ns. FastData real `/v0/multi` K=16: 157 ms for 1 round trip. Serial takes 2512 ms for 16 round trips, oracle-equal. `date-fns` → native `Intl`.
+`Map.getOrInsert` engine gate removed: 903 → 48 allocs, 32.5k → 17.6k ns (w5 session benchmarks). FastData real `/v0/multi` K=16: 157 ms for 1 round trip. Serial takes 2512 ms for 16 round trips, oracle-equal. `date-fns` → native `Intl`.
 ## Recordable demo outline (human records, human posts)
 1. Sign in with a named NEAR account, set a profile, publish a post.
 2. Follow another account, tip it through the Rust preference contract.
@@ -38,9 +37,9 @@ Q-012 video required when judges cannot open the demo. Tags @NEARProtocol, #NEAR
 Never add `website`. Print full JSON, wait for explicit yes. 201 saved. 400 fix `fields` + same requestId. 403 stop. 409 stop. 413 shorten. 503 retry same requestId.
 
 ## Rules checklist
-- Q-003: `origin-baseline` tag exists (verified), but no `pre-hackathon` / `hackathon-submission` pair and no README diff link. **Not satisfied**, so local tags were deliberately not created.
+- Q-003: `origin-baseline` tag exists and the `pre-hackathon` / `hackathon-submission` pair and README diff link are present (earlier gap, now closed; tags verified via `git rev-parse` at fact-check).
 - Q-012 video required when judges cannot open the demo.
-- Q-014 `LICENSE` present. Q-017 README "Quickstart" at line 80 with numbered install/config/account/build steps.
+- Q-014 `LICENSE` present. Q-017 README "Quickstart" section present (heading at line 63, numbered install/config/account/build steps).
 - Q-015 second project on same email named in README (Baseline and disclosure: ekklesia).
 - HELD: 0 suppression markers (`Avatar.tsx` now uses `next/image`), Node 26 `module.register` deprecation, TS7 `toBase64` typing.
 

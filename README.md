@@ -175,7 +175,7 @@ Diff: `git diff pre-hackathon..hackathon-submission`. After publishing, `https:/
 Libraries, templates and AI-generated code are listed in `ATTRIBUTION.md` and `NOTICE`.
 Q-015: the second project on the same submission email is **ekklesia** (agent market, tracks `swarms`, `agents`).
 ## Origin, license, and attribution
-Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`.
+Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). It won ENS prize categories at ETHGlobal HackMoney 2026 (`https://ethglobal.com/showcase/socialens-jps0p`).
 
 See [`LICENSE`](./LICENSE), [`ATTRIBUTION.md`](./ATTRIBUTION.md), and [`NOTICE`](./NOTICE) (Scaffold-ETH 2 baseline, with the EVM workspace deleted).
 ## Hackathon fit and constraints

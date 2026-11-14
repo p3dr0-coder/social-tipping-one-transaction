@@ -2,51 +2,23 @@
 
 ## Origin project
 
-- Repository: https://github.com/NikhilRaikwar/SocialENS
-- License: MIT (see [`LICENSE`](./LICENSE))
-- Original author: SocialENS Team
-- Import baseline: the repository as published on its default branch, imported at the start
-  of this port and retained as the project's history.
+- Repository: https://github.com/NikhilRaikwar/SocialENS (MIT, [`LICENSE`](./LICENSE)), author SocialENS Team, imported from its default branch and retained in git history.
 
 ## Reused (adapted for NEAR)
 
-The port keeps the presentation layer of the origin application, because it is chain-agnostic
-and already MIT-licensed:
+The port keeps the chain-agnostic, MIT-licensed presentation layer:
 
-- The Next.js App Router layout and page shells (`app/layout.tsx`, `app/page.tsx`,
-  `app/profile/page.tsx`, `app/[name]/page.tsx`, `app/not-found.tsx`) as the starting structure.
-- The Tailwind CSS 4 + daisyUI 5 design system, glass panels, gradients, and animations in
-  `web/styles/globals.css`.
-- `web/components/Header.tsx`, `web/components/Footer.tsx`,
-  `web/components/ThemeProvider.tsx`, and `web/components/SwitchTheme.tsx` (rewritten where
-  they touched wallet or chain state).
-- The toast notification surface (`web/utils/notification.tsx`).
-- The social UI composition and markup: compose box, feed cards, follow button, follower
-  modal, search dropdown, suggested users, sidebar, landing page, scroll-to-top.
-- The public image assets under `web/public/`.
+- App Router shells (`app/layout.tsx`, `app/page.tsx`, `app/profile/page.tsx`, `app/[name]/page.tsx`, `app/not-found.tsx`).
+- Tailwind CSS 4 + daisyUI 5 styles and animations in `web/styles/globals.css`.
+- `web/components/Header.tsx`, `web/components/Footer.tsx`, `web/components/ThemeProvider.tsx`, `web/components/SwitchTheme.tsx` (adapted for NEAR state), `web/utils/notification.tsx`, `web/public/`, and the social UI components.
 
-## Rewritten
+## Rewritten for NEAR
 
-Everything that depended on the origin chain stack was removed and reimplemented for NEAR:
+- **Data and discovery:** ENS text records and block scanning are replaced by near.social social DB. It uses `social-kv/1` FastData KV on mainnet and SocialDB on testnet. The port adds cursor pagination, indexer feeds, search, suggestions, follower lists, streaming, and transaction confirmation.
+- **Identity and wallet:** Name resolution and EVM connectors are replaced by NEAR named account IDs. The route parameter is the full account ID, and a non-implicit account gates access. Wallets use a client-only NEAR Connect provider with a function-call access key plugin.
+- **Payments and media:** ERC-20 transfers are replaced by NEP-141 `ft_transfer`. Receiver registration uses `storage_balance_bounds`, quotes come from 1Click, and avatars upload through FastFS as Borsh.
+- **Tip preferences and tooling:** Text records are replaced by `philia-tips`, which adds storage accounting, refunds, and NEP-297 events. EVM workspace scripts are deleted in favor of Rust `contract/`, sandbox tests, `scripts/`, and `demo/`.
 
-- Data layer: ENS text records replaced by the near.social social DB
-  (`social-kv/1` FastData KV on mainnet and the SocialDB contract on testnet), with cursor
-  pagination, live block streaming, and transaction confirmation through the indexer.
-- Identity: name resolution replaced by NEAR account IDs; the route parameter is the full
-  account ID and the access gate checks for a named (non-implicit) account.
-- Wallet: EVM connectors and their hooks replaced by a client-only NEAR Connect provider with
-  a function-call access key plugin.
-- Payments: ERC-20 transfers replaced by NEP-141 `ft_transfer`, including receiver
-  registration through `storage_balance_bounds`, plus an optional 1Click cross-chain quote.
-- Media: external avatar URLs replaced by FastFS uploads with a borsh-encoded payload.
-- Tip preferences: two inconsistent text records replaced by the `philia-tips` contract with
-  storage accounting, refunds, and NEP-297 events.
-- Discovery: block-log scanning replaced by the indexer's feed, search, suggestion, follower,
-  and stream endpoints.
-- Tooling: the unused EVM contract workspace scripts were deleted; the repository now has a
-  Rust contract workspace, sandbox tests, deploy scripts, and a Node demo.
+## Original port work
 
-## What is not derived from the origin
-
-The `contract/` crate, the `demo/` scripts, the `scripts/` deployment helpers, and every file
-under `web/lib/` are new work created for this port.
+`contract/`, `demo/`, `scripts/`, and all files under `web/lib/` are new work created for this port.

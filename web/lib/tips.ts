@@ -1,18 +1,10 @@
-import { JsonRpcProvider, teraToGas } from "near-api-js";
+import { teraToGas } from "near-api-js";
 import { nearConfig } from "~~/near.config";
 import { extractTxHash, isValidAccountId, type WalletConnection } from "./social";
-
-let provider: JsonRpcProvider | null = null;
-
-function getProvider(): JsonRpcProvider {
-  if (!provider) {
-    provider = new JsonRpcProvider({ url: nearConfig.rpcUrl });
-  }
-  return provider;
-}
+import { delay, getRpcProvider } from "./shared.ts";
 
 async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
-  const result = await getProvider().callFunction({ contractId, method, args });
+  const result = await getRpcProvider().callFunction({ contractId, method, args });
   if (result === undefined) {
     throw new Error(`${method} on ${contractId} returned no value`);
   }
@@ -272,11 +264,6 @@ type OneClickStatusResponse = {
   swapDetails?: OneClickSwapDetails | null;
 };
 
-function delay(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
 
 export async function getOneClickStatus(depositAddress: string): Promise<OneClickStatus> {
   const address = depositAddress.trim();

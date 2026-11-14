@@ -13,6 +13,10 @@ import {
   testnetFollowers,
   testnetFollowing,
 } from "./social-testnet";
+import { delay, toError } from "./shared.ts";
+
+// One stateless encoder reused by every write (hoisted out of the per-call hot path).
+const encoder = new TextEncoder();
 
 export { extractTxHash } from "./tx";
 
@@ -178,15 +182,6 @@ export function reputationFor(followers: number): { label: string; minimumFollow
   return REPUTATION_TIERS.find(tier => followers >= tier.minimumFollowers) ?? null;
 }
 
-function toError(value: unknown): Error {
-  if (value instanceof Error) return value;
-  if (typeof value === "string") return new Error(value);
-  try {
-    return new Error(JSON.stringify(value));
-  } catch {
-    return new Error("the wallet returned an unreadable error");
-  }
-}
 
 function assertWriteBudget(data: Record<string, unknown>): void {
   const keys = Object.keys(data);
@@ -194,7 +189,6 @@ function assertWriteBudget(data: Record<string, unknown>): void {
     throw new Error(`a single write carries at most ${QUOTAS.keysPerTx} keys`);
   }
   // Limits are bytes, not UTF-16 code units; multi-byte text must not slip past them.
-  const encoder = new TextEncoder();
   for (const key of keys) {
     if (encoder.encode(key).byteLength > QUOTAS.keyBytes) {
       throw new Error(`key "${key}" exceeds ${QUOTAS.keyBytes} bytes`);
@@ -357,11 +351,6 @@ async function fetchJson<T>(path: string, params: Record<string, string | number
   return payload as T;
 }
 
-function delay(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
 
 function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit ?? 20, 1), 100);
@@ -417,7 +406,8 @@ async function testnetAccountsFromActivity(excluded: string[]): Promise<AccountC
   for (const item of page.items) {
     const accountId = item.post.author.account_id;
     if (excludedSet.has(accountId)) continue;
-    seen.getOrInsert(accountId, { account_id: accountId });
+    // Native on every engine; no eager card allocation on repeated authors.
+    if (!seen.has(accountId)) seen.set(accountId, { account_id: accountId });
   }
   return [...seen.values()];
 }

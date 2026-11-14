@@ -4,6 +4,8 @@ import type { IndexEntry } from "near-social-js";
 import { nearConfig } from "~~/near.config";
 import type { AccountCard, AccountProfile, FeedItem, FeedPage, Post, WalletConnection } from "./social";
 import { extractTxHash } from "./tx";
+import { toError } from "./shared.ts";
+import { collectMainPosts, mainPostKey, parseMainPost } from "./main-posts";
 
 /**
  * Testnet SocialDB adapter.
@@ -31,15 +33,6 @@ const SOCIALDB_STORAGE_DEPOSIT = "50000000000000000000000";
 
 
 
-function toWriteError(value: unknown): Error {
-  if (value instanceof Error) return value;
-  if (typeof value === "string") return new Error(value);
-  try {
-    return new Error(JSON.stringify(value));
-  } catch {
-    return new Error("the wallet returned an unreadable error");
-  }
-}
 
 /**
  * Sends one `set` call to the SocialDB contract on behalf of the connected wallet.
@@ -67,7 +60,7 @@ async function testnetSet(data: Record<string, unknown>, wallet: WalletConnectio
 
   const hash = extractTxHash(settled);
   if (hash) return hash;
-  throw toWriteError(settled);
+  throw toError(settled);
 }
 
 /** SocialDB stores the latest main post as a JSON string plus its index entry. */
@@ -127,22 +120,9 @@ export async function follow(wallet: WalletConnection, target: string, on: boole
   return testnetSet(socialDbFollowData(accountId, on), wallet);
 }
 
-function parseMainPost(raw: unknown): { text: string } | null {
-  const main = typeof raw === "string" ? safeJsonParse(raw) : raw;
-  if (!main || typeof main !== "object" || !("text" in main)) return null;
-  return typeof main.text === "string" ? { text: main.text } : null;
-}
-
-function safeJsonParse(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
 
 async function loadMainPost(accountId: string): Promise<{ text: string } | null> {
-  const data = await getTestnetSocial().get({ keys: [`${accountId}/post/main`], useApiServer: false });
+  const data = await getTestnetSocial().get({ keys: [mainPostKey(accountId)], useApiServer: false });
   const accountData = data?.[accountId];
   if (!accountData || typeof accountData !== "object" || !("post" in accountData)) return null;
   const post = accountData.post;
@@ -167,13 +147,10 @@ function entryToFeedItem(entry: IndexEntry, text: string): FeedItem {
 export async function testnetActivityFeed(limit = 20): Promise<FeedPage<FeedItem>> {
   const entries = await getTestnetSocial().getActivityFeed({ limit });
   const authors = Array.from(new Set(entries.map(entry => entry.accountId)));
-  const posts = new Map<string, string>();
-  await Promise.all(
-    authors.map(async author => {
-      const main = await loadMainPost(author);
-      if (main) posts.set(author, main.text);
-    }),
-  );
+  if (authors.length === 0) return { items: [], next_cursor: null };
+  // ONE multi-key get() replaces N per-author get() calls (native batch: 1 RPC, not N).
+  const data = await getTestnetSocial().get({ keys: authors.map(mainPostKey), useApiServer: false });
+  const posts = collectMainPosts(data, authors);
   const items = entries
     .map(entry => entryToFeedItem(entry, posts.get(entry.accountId) ?? ""))
     .filter(item => item.post.text.length > 0);

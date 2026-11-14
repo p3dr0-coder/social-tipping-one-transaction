@@ -1,7 +1,6 @@
-import { JsonRpcProvider } from "near-api-js";
 import { verifyMessage } from "near-api-js/nep413";
 import { decodeBase64 as decodeBase64Strict } from "./bytes.ts";
-import { nearConfig } from "../near.config.ts";
+import { getRpcProvider, toError } from "./shared.ts";
 
 /** NEP-413 nonces are exactly 32 random bytes. */
 export const AUTH_NONCE_BYTES = 32;
@@ -54,24 +53,6 @@ export type VerifyAuthMessageArgs = {
   signature: string | Uint8Array;
 };
 
-let authProvider: JsonRpcProvider | null = null;
-
-function getAuthProvider(): JsonRpcProvider {
-  if (!authProvider) {
-    authProvider = new JsonRpcProvider({ url: nearConfig.rpcUrl });
-  }
-  return authProvider;
-}
-
-function toError(value: unknown): Error {
-  if (value instanceof Error) return value;
-  if (typeof value === "string") return new Error(value);
-  try {
-    return new Error(JSON.stringify(value));
-  } catch {
-    return new Error("the wallet returned an unreadable error");
-  }
-}
 
 function decodeBase64(value: string): Uint8Array {
   const bytes = decodeBase64Strict(value);
@@ -179,7 +160,7 @@ export async function verifyAuthMessage(args: VerifyAuthMessageArgs): Promise<vo
         ...(args.payload.callbackUrl !== undefined ? { callbackUrl: args.payload.callbackUrl } : {}),
       },
       signature,
-      provider: getAuthProvider(),
+      provider: getRpcProvider(),
     });
   } catch (cause) {
     throw new Error(`NEP-413 verification failed for ${args.accountId}: ${toError(cause).message}`);

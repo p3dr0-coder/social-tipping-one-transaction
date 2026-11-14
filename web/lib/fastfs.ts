@@ -12,6 +12,7 @@ import {
   encodePartialFastfsPayload as partialFastfsPayload,
   encodeSimpleFastfsPayload as simpleFastfsPayload,
 } from "./fastfs-codec";
+import { delay } from "./shared.ts";
 
 const GATEWAY_POLL_INTERVAL_MS = 1_500;
 const GATEWAY_POLL_TIMEOUT_MS = 30_000;
@@ -50,9 +51,7 @@ async function waitForGateway(accountId: string, path: string, timeoutMs = GATEW
     const response = await fetch(url, { cache: "no-store" });
     if (response.ok) return;
 
-    const { promise, resolve } = Promise.withResolvers<void>();
-    setTimeout(resolve, GATEWAY_POLL_INTERVAL_MS);
-    await promise;
+    await delay(GATEWAY_POLL_INTERVAL_MS);
   }
   throw new Error(`FastFS did not serve ${path} within ${Math.round(timeoutMs / 1_000)} s`);
 }

@@ -14,8 +14,8 @@ import {
 } from "./fastfs-codec";
 import { delay } from "./shared.ts";
 
-const GATEWAY_POLL_INTERVAL_MS = 1_500;
-const GATEWAY_POLL_TIMEOUT_MS = 30_000;
+const POLL_MS = 1_500;
+const TIMEOUT_MS = 30_000;
 
 async function sha256Hex(content: Uint8Array): Promise<string> {
   // WebCrypto accepts any ArrayBufferView; TS 7 types the generic buffer as
@@ -45,7 +45,7 @@ async function canonicalizeToWebp(file: File): Promise<Uint8Array> {
   }
 }
 
-async function waitForGateway(accountId: string, path: string, timeoutMs = GATEWAY_POLL_TIMEOUT_MS): Promise<void> {
+async function waitForGateway(accountId: string, path: string, timeoutMs = TIMEOUT_MS): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     // The FastFS CDN caches 404s, so every probe gets a fresh cache-busting value.
@@ -54,7 +54,7 @@ async function waitForGateway(accountId: string, path: string, timeoutMs = GATEW
     const response = await fetch(url, { cache: "no-store" });
     if (response.ok) return;
 
-    await delay(GATEWAY_POLL_INTERVAL_MS);
+    await delay(POLL_MS);
   }
   throw new Error(`FastFS did not serve ${path} within ${Math.round(timeoutMs / 1_000)} s`);
 }
@@ -173,7 +173,7 @@ export async function uploadMedia(
     // `main.fastfs.io` serves mainnet `social` writes only; testnet writes have no public
     // gateway equivalent, so polling it there would report a false failure.
     const chunks = Math.ceil(content.byteLength / CHUNK_BYTES);
-    await waitForGateway(accountId, options.relativePath, GATEWAY_POLL_TIMEOUT_MS + chunks * 2_000);
+    await waitForGateway(accountId, options.relativePath, TIMEOUT_MS + chunks * 2_000);
   }
   return `fastfs://${accountId}/social/${options.relativePath}`;
 }

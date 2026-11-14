@@ -12,7 +12,7 @@ import {
   testnetActivityFeed,
   testnetFollowers,
   testnetFollowing,
-} from "./social-testnet";
+} from "./social-db";
 import { delay, toError } from "./shared.ts";
 
 // One stateless encoder reused by every write (hoisted out of the per-call hot path).
@@ -399,7 +399,7 @@ export function fetchAccountPosts(
   });
 }
 
-async function testnetAccountsFromActivity(excluded: string[]): Promise<AccountCard[]> {
+async function activityAccounts(excluded: string[]): Promise<AccountCard[]> {
   const page = await testnetActivityFeed(100);
   const excludedSet = new Set(excluded);
   const seen = new Map<string, AccountCard>();
@@ -416,7 +416,7 @@ export async function searchAccounts(query: string): Promise<AccountCard[]> {
   const trimmed = query.trim().toLowerCase();
   if (trimmed.length === 0) return [];
   if (nearConfig.network === "testnet") {
-    const accounts = await testnetAccountsFromActivity([]);
+    const accounts = await activityAccounts([]);
     return accounts.filter(card => card.account_id.includes(trimmed));
   }
   const page = await fetchJson<FeedPage<ApiAccountCard>>("/v1/search/accounts", { q: trimmed });
@@ -425,7 +425,7 @@ export async function searchAccounts(query: string): Promise<AccountCard[]> {
 
 export async function fetchSuggestions(viewer: string): Promise<AccountCard[]> {
   if (nearConfig.network === "testnet") {
-    return testnetAccountsFromActivity([viewer]);
+    return activityAccounts([viewer]);
   }
   const page = await fetchJson<FeedPage<ApiAccountCard>>("/v1/suggestions", { viewer });
   return page.items;

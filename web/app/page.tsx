@@ -5,7 +5,7 @@ import { AccountGuard } from "~~/components/social/AccountGuard";
 import { Compose } from "~~/components/social/Compose";
 import { Feed } from "~~/components/social/Feed";
 import { Sidebar } from "~~/components/social/Sidebar";
-import { SuggestedUsers } from "~~/components/social/SuggestedUsers";
+import { Suggestions } from "~~/components/social/Suggestions";
 
 const Home: NextPage = () => {
   return (
@@ -25,7 +25,7 @@ const Home: NextPage = () => {
 
           <div className="hidden lg:block lg:col-span-3">
             <div className="flex flex-col gap-6 sticky top-24">
-              <SuggestedUsers />
+              <Suggestions />
 
               <div className="glass-panel p-6 rounded-[1.5rem] border border-white/5 opacity-50 hover:opacity-100 transition-opacity">
                 <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 leading-relaxed">

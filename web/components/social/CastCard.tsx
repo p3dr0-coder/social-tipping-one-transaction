@@ -49,7 +49,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
     <div className="glass-panel p-6 rounded-[1.5rem] transition-all duration-300 group relative overflow-hidden border border-base-content/5 hover:border-primary/30">
       {repostedBy && (
         <div className="text-[10px] uppercase tracking-widest opacity-40 mb-3">
-          Reposted by {repostedBy.account_id}
+          Repost by {repostedBy.account_id}
         </div>
       )}
       <div className="flex gap-4 relative z-10">
@@ -91,7 +91,7 @@ export const CastCard = ({ post, repostedBy }: CastCardProps) => {
                   onClick={tipAuthor}
                   disabled={tipping}
                   className="relative overflow-hidden rounded-full font-bold tracking-wide px-3 py-1 text-[10px] h-6 min-w-[65px] bg-secondary text-secondary-content shadow-lg hover:scale-105 active:scale-95 border border-base-content/10 flex items-center justify-center gap-1.5"
-                  title={`${defaultTip ? `Suggested ${defaultTip}; ` : ""}send a tip to ${authorId}`}
+                  title={`${defaultTip ? `Suggested ${defaultTip}; ` : ""}Tip ${authorId}`}
                 >
                   {tipping ? <span className="loading loading-spinner loading-xs" /> : <span>Tip</span>}
                 </button>

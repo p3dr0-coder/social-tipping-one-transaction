@@ -7,7 +7,7 @@ import { FollowButton } from "./FollowButton";
 import { useNear } from "~~/lib/near-provider";
 import { fetchSuggestions, type AccountCard } from "~~/lib/social";
 
-export const SuggestedUsers = () => {
+export const Suggestions = () => {
   const { accountId } = useNear();
   const [users, setUsers] = useState<AccountCard[]>([]);
   const [loading, setLoading] = useState(true);

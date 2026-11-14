@@ -248,10 +248,10 @@ export type OneClickPollOptions = {
   intervalMs?: number;
 };
 
-const ONECLICK_STATUS_URL = "https://1click.chaindefuser.com/v0/status";
-const ONECLICK_DEFAULT_TIMEOUT_MS = 10 * 60 * 1_000;
-const ONECLICK_DEFAULT_INTERVAL_MS = 5_000;
-const ONECLICK_TERMINAL_STATUSES: Record<string, true> = {
+const STATUS_URL = "https://1click.chaindefuser.com/v0/status";
+const POLL_TIMEOUT_MS = 10 * 60 * 1_000;
+const POLL_INTERVAL_MS = 5_000;
+const TERMINAL_STATUSES: Record<string, true> = {
   SUCCESS: true,
   INCOMPLETE_DEPOSIT: true,
   REFUNDED: true,
@@ -269,7 +269,7 @@ export async function getOneClickStatus(depositAddress: string): Promise<OneClic
   const address = depositAddress.trim();
   if (address.length === 0) throw new Error("a 1Click deposit address is required");
 
-  const url = new URL(ONECLICK_STATUS_URL);
+  const url = new URL(STATUS_URL);
   url.searchParams.set("depositAddress", address);
   const response = await fetch(url, { headers: { accept: "application/json" } });
   if (!response.ok) {
@@ -300,8 +300,8 @@ export async function pollOneClickStatus(
   depositAddress: string,
   options: OneClickPollOptions = {},
 ): Promise<OneClickStatus> {
-  const timeoutMs = options.timeoutMs ?? ONECLICK_DEFAULT_TIMEOUT_MS;
-  const intervalMs = options.intervalMs ?? ONECLICK_DEFAULT_INTERVAL_MS;
+  const timeoutMs = options.timeoutMs ?? POLL_TIMEOUT_MS;
+  const intervalMs = options.intervalMs ?? POLL_INTERVAL_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be a positive number");
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) throw new Error("intervalMs must be a positive number");
 
@@ -311,7 +311,7 @@ export async function pollOneClickStatus(
     const status = await getOneClickStatus(depositAddress);
     lastStatus = status.status;
     if (status.status === "SUCCESS") return status;
-    if (ONECLICK_TERMINAL_STATUSES[status.status]) {
+    if (TERMINAL_STATUSES[status.status]) {
       const detail = status.swapDetails?.refundReason ?? status.swapDetails?.refundedAmountFormatted;
       throw new Error(`1Click swap ended ${status.status} for ${depositAddress}${detail ? ` (${detail})` : ""}`);
     }

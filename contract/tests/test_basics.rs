@@ -30,12 +30,26 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use near_api::{
-    signer::generate_secret_key, Account, AccountId, Contract, Data, NearToken, NetworkConfig, Signer, Tokens,
+    Account, AccountId, Contract, Data, NearToken, NetworkConfig, Signer, Tokens,
+    signer::generate_secret_key,
 };
-use near_sandbox::config::{DEFAULT_GENESIS_ACCOUNT, DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY};
 use near_sandbox::Sandbox;
-use serde_json::{json, Value};
+use near_sandbox::config::{DEFAULT_GENESIS_ACCOUNT, DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY};
+use serde_json::{Value, json};
+use tokio::sync::OnceCell;
 
+static CONTRACT_WASM: OnceCell<Vec<u8>> = OnceCell::const_new();
+
+async fn contract_wasm() -> Result<Vec<u8>> {
+    CONTRACT_WASM
+        .get_or_try_init(|| async {
+            let wasm_path = cargo_near_build::build_with_cli(Default::default())
+                .map_err(|error| anyhow::anyhow!("build philia-tips wasm: {error}"))?;
+            std::fs::read(wasm_path).context("read the built philia-tips wasm")
+        })
+        .await
+        .cloned()
+}
 const FT_ACCOUNT: &str = "wrap.testnet";
 const DECIMALS: u8 = 24;
 const DEFAULT_TIP: &str = "0.1";
@@ -48,7 +62,12 @@ const SHRUNK_TIP: &str = "0.2";
 /// Storage price: 1e19 yoctoNEAR per byte (100 kB per NEAR).
 const STORAGE_BYTE_COST: u128 = 10_000_000_000_000_000_000;
 
-async fn view_string(network: &NetworkConfig, contract_id: &AccountId, method: &str, args: Value) -> Result<String> {
+async fn view_string(
+    network: &NetworkConfig,
+    contract_id: &AccountId,
+    method: &str,
+    args: Value,
+) -> Result<String> {
     let data: Data<String> = Contract(contract_id.clone())
         .call_function(method, args)
         .read_only()
@@ -58,7 +77,11 @@ async fn view_string(network: &NetworkConfig, contract_id: &AccountId, method: &
     Ok(data.data)
 }
 
-async fn tip_preference(network: &NetworkConfig, contract_id: &AccountId, account_id: &AccountId) -> Result<String> {
+async fn tip_preference(
+    network: &NetworkConfig,
+    contract_id: &AccountId,
+    account_id: &AccountId,
+) -> Result<String> {
     view_string(
         network,
         contract_id,
@@ -86,7 +109,7 @@ async fn call(
     args: Value,
     deposit: NearToken,
 ) -> Result<()> {
-    Contract(contract_id.clone())
+    let result = Contract(contract_id.clone())
         .call_function(method, args)
         .transaction()
         .deposit(deposit)
@@ -95,6 +118,8 @@ async fn call(
         .await
         .with_context(|| format!("call {method} failed"))?
         .assert_success();
+    let gas = result.total_gas_burnt.as_gas();
+    println!("[gas] {method}: {:.6} TGas ({gas} gas)", gas as f64 / 1e12);
     Ok(())
 }
 
@@ -126,11 +151,8 @@ async fn deploy_contract(
     default_tip: &str,
     decimals: u8,
 ) -> Result<()> {
-    let wasm_path = cargo_near_build::build_with_cli(Default::default())
-        .map_err(|error| anyhow::anyhow!("build philia-tips wasm: {error}"))?;
-    let wasm = std::fs::read(wasm_path).context("read the built philia-tips wasm")?;
-
-    Contract::deploy(owner_id.clone())
+    let wasm = contract_wasm().await?;
+    let result = Contract::deploy(owner_id.clone())
         .use_code(wasm)
         .with_init_call(
             "new",
@@ -147,47 +169,40 @@ async fn deploy_contract(
         .await
         .context("deploy philia-tips")?
         .assert_success();
+    let gas = result.total_gas_burnt.as_gas();
+    println!(
+        "[gas] deploy+new: {:.6} TGas ({gas} gas)",
+        gas as f64 / 1e12
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
-    let sandbox = Sandbox::start_sandbox().await.context("start near sandbox")?;
+    let sandbox = Sandbox::start_sandbox()
+        .await
+        .context("start near sandbox")?;
     let network = NetworkConfig::from_rpc_url(
         "sandbox",
-        sandbox.rpc_addr.parse().context("parse the sandbox RPC address")?,
+        sandbox
+            .rpc_addr
+            .parse()
+            .context("parse the sandbox RPC address")?,
     );
 
     // Parse the documented genesis account id instead of converting between the
     // near-account-id versions used by the sandbox and near-api crates.
-    let owner_id: AccountId = DEFAULT_GENESIS_ACCOUNT.as_str().parse().context("parse the genesis account id")?;
+    let owner_id: AccountId = DEFAULT_GENESIS_ACCOUNT
+        .as_str()
+        .parse()
+        .context("parse the genesis account id")?;
     let owner_signer = Signer::from_secret_key(
         DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY
             .parse()
             .context("parse the sandbox genesis key")?,
     )?;
 
-    let wasm_path = cargo_near_build::build_with_cli(Default::default())
-        .map_err(|error| anyhow::anyhow!("build philia-tips wasm: {error}"))?;
-    let wasm = std::fs::read(wasm_path).context("read the built philia-tips wasm")?;
-
-    Contract::deploy(owner_id.clone())
-        .use_code(wasm)
-        .with_init_call(
-            "new",
-            json!({
-                "default_tip": DEFAULT_TIP,
-                "ft_account_id": FT_ACCOUNT,
-                "decimals": DECIMALS,
-                "owner_id": owner_id.to_string(),
-            }),
-        )
-        .context("encode the init call")?
-        .with_signer(owner_signer.clone())
-        .send_to(&network)
-        .await
-        .context("deploy philia-tips")?
-        .assert_success();
+    deploy_contract(&network, &owner_id, &owner_signer, DEFAULT_TIP, DECIMALS).await?;
 
     // The deployment binds one token, exposes it, and seeds the default preference.
     assert_eq!(
@@ -280,7 +295,9 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         "the equal-length update stores the new value"
     );
     let equal_after = balance_of(&network, &alice_id).await?;
-    let gas_only = equal_before.as_yoctonear().saturating_sub(equal_after.as_yoctonear());
+    let gas_only = equal_before
+        .as_yoctonear()
+        .saturating_sub(equal_after.as_yoctonear());
     assert!(
         equal_after.as_yoctonear() < equal_before.as_yoctonear(),
         "an equal-length update must not refund anything; the balance only pays gas"
@@ -315,7 +332,9 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         "the funded write stores the long value"
     );
     let grown_after = balance_of(&network, &alice_id).await?;
-    let grown_spent = grown_before.as_yoctonear().saturating_sub(grown_after.as_yoctonear());
+    let grown_spent = grown_before
+        .as_yoctonear()
+        .saturating_sub(grown_after.as_yoctonear());
     assert!(
         grown_spent < NearToken::from_millinear(5).as_yoctonear(),
         "the deposit beyond the grown bytes must be refunded; {grown_spent} yocto were spent"
@@ -337,7 +356,9 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
         "the shrink is accepted without a deposit"
     );
     let shrink_after = balance_of(&network, &alice_id).await?;
-    let shrink_spent = shrink_before.as_yoctonear().saturating_sub(shrink_after.as_yoctonear());
+    let shrink_spent = shrink_before
+        .as_yoctonear()
+        .saturating_sub(shrink_after.as_yoctonear());
     let freed_bytes = (LONG_TIP.len() - SHRUNK_TIP.len()) as u128;
     let refunded = gas_only.saturating_sub(shrink_spent);
     assert!(
@@ -411,13 +432,21 @@ async fn tip_preferences_storage_paths_and_owner_gate() -> Result<()> {
 
 #[tokio::test]
 async fn removal_scope_and_default_validation_counterexamples() -> Result<()> {
-    let sandbox = Sandbox::start_sandbox().await.context("start near sandbox")?;
+    let sandbox = Sandbox::start_sandbox()
+        .await
+        .context("start near sandbox")?;
     let network = NetworkConfig::from_rpc_url(
         "sandbox",
-        sandbox.rpc_addr.parse().context("parse the sandbox RPC address")?,
+        sandbox
+            .rpc_addr
+            .parse()
+            .context("parse the sandbox RPC address")?,
     );
 
-    let owner_id: AccountId = DEFAULT_GENESIS_ACCOUNT.as_str().parse().context("parse the genesis account id")?;
+    let owner_id: AccountId = DEFAULT_GENESIS_ACCOUNT
+        .as_str()
+        .parse()
+        .context("parse the genesis account id")?;
     let owner_signer = Signer::from_secret_key(
         DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY
             .parse()

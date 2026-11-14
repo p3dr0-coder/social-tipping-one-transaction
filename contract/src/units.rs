@@ -19,7 +19,9 @@ fn parse_digits(digits: &str) -> u128 {
 
 fn pow10(exponent: usize) -> u128 {
     (0..exponent).fold(1u128, |value, _| {
-        value.checked_mul(10).expect("decimals are too large for u128")
+        value
+            .checked_mul(10)
+            .expect("decimals are too large for u128")
     })
 }
 

@@ -13,7 +13,7 @@
 
 use near_sdk::borsh::BorshSerialize;
 use near_sdk::store::LookupMap;
-use near_sdk::{env, near, AccountId, BorshStorageKey, PanicOnDefault, Promise};
+use near_sdk::{AccountId, BorshStorageKey, PanicOnDefault, Promise, env, near};
 
 mod units;
 
@@ -38,7 +38,10 @@ pub struct TipPreferences {
 #[near(event_json(standard = "philia-tips"))]
 pub enum TipEvent {
     #[event_version("1.0.0")]
-    PreferenceSet { account_id: AccountId, amount: String },
+    PreferenceSet {
+        account_id: AccountId,
+        amount: String,
+    },
     #[event_version("1.0.0")]
     PreferenceRemoved { account_id: AccountId },
     #[event_version("1.0.0")]
@@ -48,7 +51,12 @@ pub enum TipEvent {
 #[near]
 impl TipPreferences {
     #[init]
-    pub fn new(default_tip: String, ft_account_id: AccountId, decimals: u8, owner_id: AccountId) -> Self {
+    pub fn new(
+        default_tip: String,
+        ft_account_id: AccountId,
+        decimals: u8,
+        owner_id: AccountId,
+    ) -> Self {
         // Reject a bad default at init instead of failing the first tip.
         parse_units(&default_tip, decimals);
         Self {
@@ -83,7 +91,10 @@ impl TipPreferences {
         let grown = env::storage_byte_cost().saturating_mul(after.saturating_sub(before) as u128);
         let freed = env::storage_byte_cost().saturating_mul(before.saturating_sub(after) as u128);
         let deposit = env::attached_deposit();
-        assert!(deposit >= grown, "attach a storage deposit for the bytes this write adds");
+        assert!(
+            deposit >= grown,
+            "attach a storage deposit for the bytes this write adds"
+        );
 
         let refund = deposit.saturating_sub(grown).saturating_add(freed);
         if !refund.is_zero() {
@@ -122,7 +133,8 @@ impl TipPreferences {
             // Flush the removal before measuring the freed bytes.
             self.preferences.flush();
             let after = env::storage_usage();
-            let freed = env::storage_byte_cost().saturating_mul(before.saturating_sub(after) as u128);
+            let freed =
+                env::storage_byte_cost().saturating_mul(before.saturating_sub(after) as u128);
             if !freed.is_zero() {
                 Promise::new(caller.clone()).transfer(freed).detach();
             }
@@ -143,7 +155,7 @@ impl TipPreferences {
 mod tests {
     use super::*;
     use near_sdk::serde_json::Value;
-    use near_sdk::test_utils::{get_logs, VMContextBuilder};
+    use near_sdk::test_utils::{VMContextBuilder, get_logs};
     use near_sdk::testing_env;
 
     fn account(id: &str) -> AccountId {
@@ -189,9 +201,11 @@ mod tests {
 
     #[test]
     fn unknown_account_falls_back_to_the_default_tip() {
-        testing_env!(VMContextBuilder::new()
-            .current_account_id(account("philia.testnet"))
-            .build());
+        testing_env!(
+            VMContextBuilder::new()
+                .current_account_id(account("philia.testnet"))
+                .build()
+        );
         let contract = deployed("0.1", 6);
 
         // Nothing was inserted into the LookupMap, so the read misses and falls back.
@@ -209,10 +223,12 @@ mod tests {
 
     #[test]
     fn preference_set_event_has_the_nep297_shape() {
-        testing_env!(VMContextBuilder::new()
-            .current_account_id(account("philia.testnet"))
-            .predecessor_account_id(account("alice.testnet"))
-            .build());
+        testing_env!(
+            VMContextBuilder::new()
+                .current_account_id(account("philia.testnet"))
+                .predecessor_account_id(account("alice.testnet"))
+                .build()
+        );
 
         TipEvent::PreferenceSet {
             account_id: account("alice.testnet"),
@@ -230,10 +246,12 @@ mod tests {
 
     #[test]
     fn preference_removed_event_has_the_nep297_shape() {
-        testing_env!(VMContextBuilder::new()
-            .current_account_id(account("philia.testnet"))
-            .predecessor_account_id(account("alice.testnet"))
-            .build());
+        testing_env!(
+            VMContextBuilder::new()
+                .current_account_id(account("philia.testnet"))
+                .predecessor_account_id(account("alice.testnet"))
+                .build()
+        );
 
         TipEvent::PreferenceRemoved {
             account_id: account("alice.testnet"),
@@ -249,10 +267,12 @@ mod tests {
 
     #[test]
     fn default_tip_set_event_has_the_nep297_shape() {
-        testing_env!(VMContextBuilder::new()
-            .current_account_id(account("philia.testnet"))
-            .predecessor_account_id(account("owner.testnet"))
-            .build());
+        testing_env!(
+            VMContextBuilder::new()
+                .current_account_id(account("philia.testnet"))
+                .predecessor_account_id(account("owner.testnet"))
+                .build()
+        );
 
         TipEvent::DefaultTipSet {
             amount: "0.25".to_string(),

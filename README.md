@@ -1,4 +1,4 @@
-# philia — sovereign social on NEAR
+# philia — social on NEAR
 philia is an on-chain social app. Profiles, posts, follow edges, and tip preferences live in NEAR-native storage. There is no application database or server-side account system. A named NEAR account is the identity, the wallet is the login, and the social graph is public data. The app ships a Rust tipping-preferences contract and a zero-funds testnet demo. The demo sets a profile and publishes a post. It follows an account, reads the feed and follower list, and settles a tip.
 
 ```mermaid
@@ -85,14 +85,7 @@ sequenceDiagram
 
 `social` has no contract code. FastData calls return `CodeDoesNotExist` while the indexer records the valid write. philia treats that answer as success. It confirms the write via `GET /v1/tx/{hash}` (see [`CodeDoesNotExist` is success](#codedoesnotexist-is-success)). `philia-tips` binds one NEP-141 token (account and decimals). It validates amounts without floats, charges storage growth, refunds shrinks, and emits `PreferenceSet`, `PreferenceRemoved`, and `DefaultTipSet`.
 ## Repository layout
-```
-near-philia/
-├── contract/          # philia-tips: units.rs, lib.rs, sandbox tests
-├── web/               # philia-web: Next.js app, social/tips/fastfs libraries
-├── demo/              # zero-funds testnet loop + gas/latency and storage measurement
-├── scripts/           # account creation and contract deployment
-└── .env.example
-```
+`contract/` (`philia-tips`: `units.rs`, `lib.rs`, sandbox tests) · `web/` (`philia-web`: Next.js app, social/tips/fastfs libraries) · `demo/` (zero-funds testnet loop, gas/latency and storage measurement) · `scripts/` (account creation and contract deployment) · `.env.example`.
 ## Quickstart
 Prerequisites: Node.js >= 26.0.0, pnpm >= 12.18.0, Rust 1.100.0 (`wasm32-unknown-unknown`), `cargo-near` 0.23.0, and `near-cli-rs` 0.31.1. V8 14.6 ships `Uint8Array` base64/hex codecs and `Map.getOrInsert`, though the app uses a portable `Map` pattern.
 
@@ -166,7 +159,7 @@ Edits and deletes keep public history. Avatars cap at 1 MiB per FastFS upload.
 - **SocialDB (testnet demo):** `v1.social08.testnet` requires 0.02 NEAR (`storage_balance_bounds`). The demo attaches 0.05 NEAR, leaving the surplus in storage balance.
 - **Tip-preference storage:** `set_tip_preference` deposits for growth, costs 0 for equal-length updates, and refunds shrinks. A ≤64-byte key + value + record costs ~0.001–0.002 NEAR at 1e19 yocto/B (≈0.01024 NEAR/KB). See `demo/measure-storage.mjs`.
 - **Function-call key:** Signs zero-deposit `__fastdata_kv` and `__fastdata_fastfs` calls only. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` always use wallet signing. Key allowance is not a spend limit.
-- **Testnet vs mainnet:** Testnet SocialDB writes target `v1.social08.testnet` (not indexed by api2). Raw testnet FastData writes index at `kv.test.fastnear.com`. Mainnet writes target `social` and `api2.near.social`. `NEXT_PUBLIC_NEAR_NETWORK` picks the adapter. Default testnet RPC is `https://rpc.testnet.fastnear.com` (override with `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL`). Accounts are not unique humans, so daily quotas only bound per-account spam.
+- **Testnet vs mainnet:** Testnet SocialDB writes target `v1.social08.testnet` (not indexed by api2.near.social; there is no testnet api2 API). Raw testnet FastData writes index at `kv.test.fastnear.com`. Mainnet writes target `social` and `api2.near.social`. `NEXT_PUBLIC_NEAR_NETWORK` picks the adapter. Default testnet RPC is `https://rpc.testnet.fastnear.com` (override with `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL`). Accounts are not unique humans, so daily quotas only bound per-account spam.
 ## Tip assets and fees
 Each `philia-tips` deployment binds one NEP-141 token (`ft_transfer`):
 
@@ -203,24 +196,12 @@ node demo/measure-tip.mjs
 
 Testnet `social` writes return `AccountDoesNotExist` by design while KV still indexes them. `/v1/tx` is mainnet-only. All three scripts refuse mainnet and exit non-zero on unexpected errors.
 ## Origin, license, and attribution
-Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). The origin ran from 2026-02-08 to 2026-03-14 and has 2 stars. It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`. Keeps the UI layer and rebuilds data, wallet, and payment layers, fixing four origin bugs:
-- **Tip-preference key mismatch:** Profile wrote one record while readers read another, which fell back to `0.1`. philia uses `get_tip_preference(author)` as the one source of truth.
-- **Dead follower count:** Origin read an unwritten record (always 0). philia reads `counts.followers` and `/v1/accounts/{id}/followers`.
-- **20-cast cap / 20,000-block window:** Origin rewrote a 20-cast slice and scanned 20,000 blocks. philia writes append-only posts and reads full-history indexer feeds.
-- **Asset mismatch:** Origin docs claimed ETH while transferring Sepolia USDC. philia uses NEP-141 only via `get_tip_token()`.
+Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). The origin ran from 2026-02-08 to 2026-03-14 and has 2 stars. It won ETHGlobal HackMoney 2026 at `https://ethglobal.com/showcase/socialens-jps0p`. The UI layer is reused; data, wallet, and payment layers are rebuilt on NEAR. Origin defects the port removes: a tip-preference key mismatch (readers fell back to `0.1`; now one source, `get_tip_preference(author)`), a follower count read from an unwritten record (now `counts.followers` and `/v1/accounts/{id}/followers`), a 20-cast cap and 20,000-block scan (now append-only posts and full-history indexer feeds), and docs claiming ETH over Sepolia USDC transfers (now NEP-141 only via `get_tip_token()`).
 
 See [`LICENSE`](./LICENSE), [`ATTRIBUTION.md`](./ATTRIBUTION.md), and [`NOTICE`](./NOTICE) (Scaffold-ETH 2 baseline, with the EVM workspace deleted).
 ## Hackathon fit and constraints
 Tracks: `social`, `realworld` (end 2026-11-14T23:59:00Z). Uses neither SputnikDAO nor Trezu. It relies on named NEAR accounts, custom `philia-tips`, and client-derived follower tiers (≥10 / ≥100 / ≥1,000). Nothing is stored on-chain. The app reads `/v1/accounts/{id}`. No privacy layer, NFT wallet, or spend firewall.
-- Testnet uses `v1.social08.testnet` / `near-social-js` / `kv.test.fastnear.com` (no `api2.near.social` testnet API). Function-call keys sign zero-deposit `__fastdata_kv` / `__fastdata_fastfs` only. Payable calls use wallet signing.
 - Avatars cap at 1 MiB (`Simple`). Larger media uses 1 MiB `Partial` chunks up to 32 MiB.
-## Before you submit (human-only)
-No submission was made from this repo. Checklist for the human submitter:
-- Send the 11-field payload without `website` (omit it, because an empty string is a spam trap). Set `tracks: ["social"]` (add another only if covered).
-- Generate one fresh UUID `requestId` and reuse it on retries. Print the full JSON, read the contact notice, and send only after an explicit "yes".
-- On 403, stop and tell the human (do not retry, reformat, or swap `requestId`). On 201, use `/request-changes` for fixes (never resubmit).
-- X demo video ≤2 min, tagging **@NEARProtocol + #NEARHackathon**. Keep any optional host (Vercel Hobby, GitHub Pages, Netlify Free) live through Nov 18 (ideally Nov 25).
-- Use WORKLOG numbers only once artifacts exist.
 ## Development commands
 ```bash
 pnpm dev                          # web app
@@ -240,4 +221,4 @@ Optional contributor skills:
 npx skills add near/agent-skills --skill near-smart-contracts --skill near-dapp --skill near-api-js --skill near-intents --skill near-kit
 ```
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Submission payload fields, deadline, video, and checklist rules live in [`SUBMISSION-PREP.md`](./SUBMISSION-PREP.md).

@@ -34,3 +34,30 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# docs temporaries
+*.md.bak
+*.md.tmp
+*.md.orig
+*.tok
+.~*
+
+# test and runtime output
+*.out
+*.err
+.coverage
+.pytest_cache/
+htmlcov/
+bench.json
+evidence/*.log
+
+# tool caches
+.cache/
+.turbo/
+.parcel-cache/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+
+# production build output
+dist/

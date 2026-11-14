@@ -206,7 +206,7 @@ Testnet `social` writes return `AccountDoesNotExist` by design while KV still in
 ## Baseline and disclosure
 
 Baseline: tag `pre-hackathon` marks the imported tree at `c716879` (SocialENS).
-Submission: tag `hackathon-submission` marks the submitted state; `git rev-parse --short hackathon-submission` prints it.
+Submission: tag `hackathon-submission` marks the submitted state. `git rev-parse --short hackathon-submission` prints it.
 Diff: `git diff pre-hackathon..hackathon-submission`. After publishing, `https://github.com/<owner>/<repo>/compare/pre-hackathon...hackathon-submission`.
 Libraries, templates and AI-generated code are listed in `ATTRIBUTION.md` and `NOTICE`.
 ## Origin, license, and attribution

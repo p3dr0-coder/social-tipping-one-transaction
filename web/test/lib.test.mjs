@@ -21,7 +21,6 @@ import {
 import { mainPostKey, parseMainPost, collectMainPosts } from "../lib/main-posts.ts";
 import { timeAgo } from "../lib/time.ts";
 
-// ---------- byte codecs / NEP-413 (was bytes.test.mjs) ----------
 test("base64 round-trips and rejects bad input", () => {
   const bytes = new Uint8Array([0, 1, 2, 250, 251, 255]);
   assert.equal(encodeBase64(bytes), Buffer.from(bytes).toString("base64"));
@@ -47,7 +46,6 @@ test("auth nonce and payload keep the 32-byte guarantee and fail-fast validation
   assert.throws(() => createAuthPayload({ message: "x", recipient: "" }), /must not be empty/);
 });
 
-// ---------- FastData builders (was fastdata-core.test.mjs) ----------
 test("latest URL encodes the full key and metadata query", () => {
   assert.equal(
     fastDataLatestUrl("https://kv.example/", {
@@ -88,7 +86,6 @@ test("multi body accepts only fully qualified keys and caps at 100", () => {
   assert.throws(() => fastDataMultiBody(tooMany), /at most 100/);
 });
 
-// ---------- FastFS Borsh codec (was fastfs-codec.test.mjs) ----------
 function reference(parts) {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const output = new Uint8Array(total);
@@ -169,7 +166,6 @@ test("codec preserves the existing validation errors", () => {
   assert.throws(() => encodePartialFastfsPayload("x", "text/plain", new Uint8Array(1), 0, 10, 0), /nonce must be/);
 });
 
-// ---------- batched main-post parsing (was main-posts.test.mjs) ----------
 function oldLoadMainPost(data, author) {
   const accountData = data?.[author];
   if (!accountData || typeof accountData !== "object" || !("post" in accountData)) return null;
@@ -230,7 +226,6 @@ test("one merged get() response covers all authors with no N+1 reads", () => {
   assert.deepEqual([...posts.keys()], authors);
 });
 
-// ---------- native timeAgo (replaces date-fns formatDistanceToNow) ----------
 test("timeAgo uses past/future/now labels across unit thresholds", () => {
   const now = 1_700_000_000_000;
   assert.match(timeAgo(now - 5_000, now), /ago/);

@@ -207,7 +207,7 @@ Port of **SocialENS** (MIT, `https://github.com/NikhilRaikwar/SocialENS`). The o
 
 See [`LICENSE`](./LICENSE), [`ATTRIBUTION.md`](./ATTRIBUTION.md), and [`NOTICE`](./NOTICE) (Scaffold-ETH 2 baseline, with the EVM workspace deleted).
 ## Hackathon fit and constraints
-Tracks: `social`, `realworld` (end 2026-11-14T23:59:00Z). Uses neither SputnikDAO nor Trezu. It relies on named NEAR accounts, custom `philia-tips`, and client-derived follower tiers (≥10 / ≥100 / ≥1,000). Nothing is stored on-chain. The app reads `/v1/accounts/{id}`. No privacy layer, NFT wallet, or spend firewall.
+Tracks: `social`, `open` (end 2026-11-14T23:59:00Z). Uses neither SputnikDAO nor Trezu. It relies on named NEAR accounts, custom `philia-tips`, and client-derived follower tiers (≥10 / ≥100 / ≥1,000). Nothing is stored on-chain. The app reads `/v1/accounts/{id}`. No privacy layer, NFT wallet, or spend firewall.
 - Avatars cap at 1 MiB (`Simple`). Larger media uses 1 MiB `Partial` chunks up to 32 MiB.
 ## Development commands
 ```bash

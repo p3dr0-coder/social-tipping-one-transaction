@@ -1,5 +1,5 @@
 # SUBMISSION-PREP — philia (LOCAL DRAFT, NOT SUBMITTED)
-Tracks: `social`, `realworld`. Deadline 2026-11-14T23:59:00Z. No push, no remote, no tags, no X post, no submit. Local commit only.
+Tracks: `social`, `open`. Deadline 2026-11-14T23:59:00Z. No push, no remote, no tags, no X post, no submit. Local commit only.
 
 ## Judge quickstart (do X → see Y), MEASURED on Celesto Box B
 ```

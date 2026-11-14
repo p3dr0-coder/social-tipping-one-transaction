@@ -8,78 +8,46 @@ sequenceDiagram
     accTitle: philia runtime flow
     accDescr: Wallet signs a tip transaction, the app confirms it, and the contract stores the preference.
     autonumber
-    box rgba(226,238,255,0.12) Client side
     participant U as NEAR Connect wallet
     participant W as philia-web app
-    end
-    box rgba(230,247,235,0.12) NEAR chain and indexers
     participant S as near.social api2
     participant P as philia-tips contract
     participant F as bound NEP-141 token
-    end
-    box rgba(255,244,214,0.12) RPC gateway
-    participant R as NEAR RPC
-    end
     rect rgba(226,238,255,0.20)
     Note over W,S: PHASE 1 — Read social profile
     W->>+S: GET /v1/accounts/{id} and follower pages
     S-->>-W: profile, counts, posts, next cursor
-    W->>W: derive badge from counts 10 100 1000
     end
     rect rgba(230,247,235,0.20)
     Note over W,F: PHASE 2 — Build tip intent
     W->>W: guard account id, viewer, and self-tip
-    W->>+P: get_tip_token()
-    P-->>-W: ft_account_id and decimals
-    W->>+P: get_tip_preference(author)
-    P-->>-W: stored amount string
+    W->>+P: get_tip_token() and get_tip_preference(author)
+    P-->>-W: token decimals and stored amount
     W->>W: parse_units(amount, decimals) without floats
-    W->>+F: storage_balance_of(author)
-    F-->>-W: null for an unregistered author
-    Note over W,F: storage_balance_bounds guards an unregistered author
     end
     rect rgba(255,244,214,0.20)
     Note over U,W: PHASE 3 — Sign delegate
     W->>U: signAndSendTransaction(storage_deposit) when unregistered
     W->>+U: signAndSendTransaction(ft_transfer, 1 yoctoNEAR)
-    U->>U: sign with full-access or function-call key
     U-->>-W: signed outcome or thrown error
     end
     rect rgba(243,232,255,0.20)
-    Note over R,W: PHASE 4 — Relay to RPC
-    W->>+R: broadcast the signed transaction
-    alt receipt executes
-    R-->>-W: FinalExecutionOutcome
-    else social holds no contract code
-    R-->>W: CodeDoesNotExist, receipt still succeeds
-    end
-    end
-    rect rgba(255,232,232,0.20)
-    Note over W,F: PHASE 5 — Confirm transfer
-    W->>W: extractTxHash reads transaction, outcome, or context
-    W->>W: throw when the outcome carries no hash
+    Note over W,F: PHASE 4-5 — Relay and confirm
+    W->>W: broadcastTx, extractTxHash (throws when the outcome carries no hash)
     W->>+F: ft_balance_of(author)
     F-->>-W: base units credited to the author
     end
-    rect rgba(224,247,250,0.20)
-    Note over W,S: PHASE 6 — Settle outcome
-    W->>+S: GET /v1/tx/{hash} every 1500 ms
-    S-->>-W: indexed flag and per-key status
-    Note over W,S: invalid, ignored, or rate_limited fails. Never retry.
-    W->>W: sumOutcomeFees over tokens_burnt
-    end
     rect rgba(255,248,225,0.20)
-    Note over P,W: PHASE 7 — Write receipt
+    Note over P,W: PHASE 6-7 — Settle outcome and write receipt
+    W->>W: poll /v1/tx/{hash} until indexed, sumOutcomeFees over tokens_burnt
     W->>+P: set_tip_preference(amount) with a storage deposit
-    P->>P: parse_units, flush, measure storage_usage
     P-->>-W: PreferenceSet event and refund receipt
     end
 ```
 ## What you can do
-- Sign in with a named NEAR account (no email, password, or app record). Set a profile (display name, bio, FastFS avatar).
-- Publish an append-only post on mainnet FastData, or store the latest main post on testnet SocialDB. Follow, unfollow, and read the global feed plus follower/following lists.
-- View a client-derived reputation badge from indexer follower counts (≥10 / ≥100 / ≥1,000). Set a per-account tip preference and tip in the bound NEP-141 token.
-- On mainnet FastData, confirm writes by hash via the indexer (showing any rejected keys). Testnet SocialDB writes return after submission because api2 is mainnet-only.
+- Sign in with a named NEAR account (no email, password, or app record). Set a profile, publish posts, follow accounts, and read the global feed and follower lists.
+- Tip in the bound NEP-141 token at the author's stored per-account preference; reputation badges derive client-side from indexer follower counts.
+- Mainnet writes confirm by hash via the indexer (rejected keys shown); testnet SocialDB writes return after submission because api2 is mainnet-only.
 ## Architecture
 | Layer | Design |
 |---|---|
@@ -133,7 +101,7 @@ Expected final line (after profile, post, follow, feed/follower reads, and NEP-1
 ```
 done: a post indexed + a tip settled
 ```
-The script fails fast on missing vars or mismatched network IDs. Afterward, run `pnpm dev` for the web UI. Run `demo/measure.mjs` for gas and latency. Run `demo/measure-storage.mjs` for contract storage cost (see [Numbers](#numbers)). Mainnet writes spend real funds: `__fastdata_kv` to `social`, `/v1/tx` confirm, api2 reads. Tips run only if `TIP_FT`, `BOB_ACCOUNT`, and `PHILIA_CONTRACT` are set:
+The script fails fast on missing vars or mismatched network IDs. Afterward, run `pnpm dev` for the web UI and `demo/measure*.mjs` for gas, latency, and storage numbers (see [Numbers](#numbers)). Mainnet writes spend real funds; tips run only if `TIP_FT`, `BOB_ACCOUNT`, and `PHILIA_CONTRACT` are set:
 ```bash
 PHILIA_NETWORK=mainnet ALICE_ACCOUNT=you.near ALICE_PRIVATE_KEY=... node demo/social-loop.mjs
 ```
@@ -164,11 +132,9 @@ FastData UTC-day quotas (over-quota writes return `rate_limited`):
 
 Edits and deletes keep public history. Avatars cap at 1 MiB per FastFS upload.
 
-- **Account creation:** Named accounts cost 0.007 NEAR in gas (covers 770 bytes). Extra bytes stake 1e19 yocto/B per NEP-448. `scripts/create-accounts.sh` creates the parent from the faucet and two sub-accounts at 0.1 NEAR.
-- **SocialDB (testnet demo):** `v1.social08.testnet` requires 0.02 NEAR (`storage_balance_bounds`). The demo attaches 0.05 NEAR, leaving the surplus in storage balance.
-- **Tip-preference storage:** `set_tip_preference` deposits for growth, costs 0 for equal-length updates, and refunds shrinks. A ≤64-byte key + value + record costs ~0.001–0.002 NEAR at 1e19 yocto/B (≈0.01024 NEAR/KB). See `demo/measure-storage.mjs`.
-- **Function-call key:** Signs zero-deposit `__fastdata_kv` and `__fastdata_fastfs` calls only. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` always use wallet signing. Key allowance is not a spend limit.
-- **Testnet vs mainnet:** Testnet SocialDB writes target `v1.social08.testnet` (not indexed by api2.near.social; there is no testnet api2 API). Raw testnet FastData writes index at `kv.test.fastnear.com`. Mainnet writes target `social` and `api2.near.social`. `NEXT_PUBLIC_NEAR_NETWORK` picks the adapter. Default testnet RPC is `https://rpc.testnet.fastnear.com` (override with `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL`). Accounts are not unique humans, so daily quotas only bound per-account spam.
+- **Costs:** named accounts cost 0.007 NEAR in gas for 770 bytes (extra bytes stake 1e19 yocto/B per NEP-448; `scripts/create-accounts.sh` faucets the parent and creates two sub-accounts at 0.1 NEAR); testnet SocialDB needs 0.02 NEAR storage (the demo attaches 0.05); tip-preference storage deposits for growth, costs 0 for equal-length updates, refunds shrinks, ~0.001–0.002 NEAR per ≤64-byte record (see `demo/measure-storage.mjs`).
+- **Function-call key:** signs zero-deposit `__fastdata_kv` and `__fastdata_fastfs` calls only. `ft_transfer` (1 yoctoNEAR) and `storage_deposit` always use wallet signing. Key allowance is not a spend limit.
+- **Testnet vs mainnet:** testnet SocialDB (`v1.social08.testnet`) is not indexed by api2.near.social (there is no testnet api2 API); raw testnet FastData writes index at `kv.test.fastnear.com`; mainnet writes target `social` and `api2.near.social`; default testnet RPC is `https://rpc.testnet.fastnear.com` (override with `NEXT_PUBLIC_NEAR_RPC_URL` or `NEAR_RPC_URL`). Accounts are not unique humans, so daily quotas only bound per-account spam.
 ## Tip assets and fees
 Each `philia-tips` deployment binds one NEP-141 token (`ft_transfer`):
 

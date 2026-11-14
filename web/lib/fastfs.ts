@@ -18,7 +18,10 @@ const GATEWAY_POLL_INTERVAL_MS = 1_500;
 const GATEWAY_POLL_TIMEOUT_MS = 30_000;
 
 async function sha256Hex(content: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", content);
+  // WebCrypto accepts any ArrayBufferView; TS 7 types the generic buffer as
+  // ArrayBufferLike, which is not a BufferSource at the type level.
+  const bytes: BufferSource = content as BufferSource;
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
   return encodeHex(new Uint8Array(digest));
 }
 

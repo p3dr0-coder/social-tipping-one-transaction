@@ -1,6 +1,8 @@
-export default {
+const config = {
   arrowParens: "avoid",
   printWidth: 120,
   tabWidth: 2,
   trailingComma: "all",
 };
+
+export default config;

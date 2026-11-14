@@ -2,7 +2,7 @@
 name = "philia-tips"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.100"
 description = "Tip preferences for philia: one token per deployment, storage-staked decimal amounts, NEP-297 events."
 license = "MIT"
 publish = false
@@ -11,12 +11,12 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "=5.30.1"
+near-sdk = "=5.30.2"
 
 [dev-dependencies]
 # `testing_env!` and `test_utils` live behind this feature; dev-only, so wasm builds stay lean.
-near-sdk = { version = "=5.30.1", features = ["unit-testing"] }
-near-sandbox = "0.4.0"
+near-sdk = { version = "=5.30.2", features = ["unit-testing"] }
+near-sandbox = "0.4.1"
 near-api = "0.8.7"
 cargo-near-build = "0.11.5"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
